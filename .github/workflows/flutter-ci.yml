@@ -1,0 +1,57 @@
+name: Flutter CI
+
+# Primary guardrail workflow that ensures every consuming repo keeps formatting,
+# static analysis, tests, and semantic versioning in sync before merging.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  verify-version-tag:
+    if: github.repository != 'draftm0de/github.workflows'
+    # This repo only hosts templates, so bail if someone triggers workflow here.
+    # Always validate semantic version/tag parity before doing any heavy work.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # Need full history so tag validation can see prior releases.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify auto-tagging
+        # Run the shared action that parses pubspec.yaml and predicts the next tag.
+        id: pubspec
+        uses: ./.github/actions/flutter-auto-tagging
+
+  tests:
+    if: github.repository != 'draftm0de/github.workflows' && github.repository != 'draftm0de/flutter.clone'
+    # Skip both this catalog repo and the clone mirror that shouldn't run tests.
+    needs: verify-version-tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # Fetch code again because each job operates in its own runner workspace.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify auto-tagging
+        id: pubspec
+        # Re-run to ensure every test matrix leg has the pubspec metadata handy.
+        uses: ./.github/actions/flutter-auto-tagging
+
+      - name: Run formatter/analyzer/tests
+        # Composite action orchestrates Flutter setup and quality gates.
+        uses: ./.github/actions/flutter-test

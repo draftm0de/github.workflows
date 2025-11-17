@@ -1,0 +1,65 @@
+name: flutter-test
+description: flutter-test
+
+# Composite action that mirrors the full CI gate: setup Flutter, enforce
+# formatting/analyzer cleanliness, ensure localization is checked in, and run tests.
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      # Ensure tests run against the workflow caller's revision.
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        flutter-version-file: pubspec.yaml
+        cache: true
+      # Download Flutter SDK matching the repo's desired version.
+
+    - name: Cache pub packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.pub-cache
+          **/.dart_tool
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+      # Warms the pub cache so repeated workflow runs stay fast.
+
+    - name: Flutter pub get
+      run: flutter pub get
+      # Install package dependencies before formatting/testing.
+
+    - name: Generate localizations and verify they are commited
+      run: |
+        if [ -f "l10n.yaml" ]; then
+          flutter gen-l10n
+
+          if ! git diff --quiet; then
+            echo "::error::Localization files are not committed or outdated!"
+            echo "Run 'flutter gen-l10n' locally and commit the generated files."
+            git diff
+            exit 1
+          else 
+            echo "✔ Localization files are up to date."
+          fi
+        else
+          echo "::notice::No l10n.yaml found → skipping localization verification"
+        fi        
+      # Prevents drift between generated localization artifacts and source.
+
+    - name: Enforce formatting
+      run: dart format --output=none --set-exit-if-changed .
+      # Fails if any Dart file is not formatted.
+
+    - name: Analyze
+      run: dart analyze .
+      # Static analysis gate.
+
+    - name: Run tests
+      run: flutter test
+      # Executes suite; bubbles up exit code for CI.

@@ -1,0 +1,66 @@
+name: Flutter Release
+
+# Publishes the next semantic version tag (and bumps pubspec) whenever main advances.
+on:
+  push:
+    branches:
+      - main
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  version-auto-tag:
+    # Avoid running on disallowed repo and prevent loops on bot pushes.
+    if: github.repository != 'draftm0de/github.workflows' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # Fetch complete history to ensure tagging logic can diff accurately.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git user
+        # Configure bot identity for automated commits/pushes.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"   
+          echo "✔ Git use configured successfully!"
+
+      - name: Build auto-tagging
+        # Reuse shared action that derives current and next semantic versions.
+        id: pubspec
+        uses: ./.github/actions/flutter-auto-tagging
+
+      - name: Patch pubspec.yaml
+        if: steps.pubspec.outputs.new_version_with_build != ''
+        # Persist the computed version back into pubspec.yaml so repos stay aligned.
+        run: |
+          TARGET_VERSION=${{ steps.pubspec.outputs.new_version_with_build }}
+
+          sed -i "s/^version: .*/version: ${TARGET_VERSION}/" pubspec.yaml
+
+          echo "✔ pubspec.yaml version set to: $TARGET_VERSION"
+          echo "- [x] pubspec.yaml version set to: $TARGET_VERSION" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit pubspec.yaml changes
+        if: steps.pubspec.outputs.new_version_with_build != ''
+        # Only commit if the version field actually changed.
+        run: |
+          TARGET_VERSION=${{ steps.pubspec.outputs.new_version_with_build }}
+          git add -A
+          git commit -m "chore: auto-tagging version to ${TARGET_VERSION} [skip ci]"
+          git push
+
+      - name: Create and push tag
+        if: steps.pubspec.outputs.new_version != ''
+        # Tag the commit and push so downstream release flows can react.
+        run: |
+          TARGET_VERSION=${{ steps.pubspec.outputs.new_version }}
+          TAG="v${TARGET_VERSION}"
+
+          git tag "$TAG"
+          git push origin "$TAG"
