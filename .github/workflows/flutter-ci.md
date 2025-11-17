@@ -11,6 +11,23 @@ This workflow guards DraftMode Flutter packages by enforcing formatting, analyze
 1. **verify-version-tag** — Checks out the repo with full history and runs the `flutter-auto-tagging` action to ensure the current `pubspec.yaml` version doesn’t lag behind existing git tags.
 2. **tests** — Repeats the checkout, re-reads pubspec metadata for downstream consumers, then executes the `flutter-test` composite action to set up Flutter, enforce formatting/analyzer consistency, and run `flutter test`.
 
+## How to Use
+Reference the workflow from another repository via `workflow_call` so you stay on the latest automation, or copy it verbatim if you need further tweaks.
+
+```yaml
+# .github/workflows/ci.yml in your repo
+name: CI
+
+on: [pull_request]
+
+jobs:
+  draftmode-flutter-ci:
+    uses: draftm0de/github.workflows/.github/workflows/flutter-ci.yml@main
+    with: {}
+    secrets: inherit
+```
+The `secrets: inherit` line lets the called workflow use the same repository secrets (e.g., for private pub servers). Override behavior by forking this repo or pinning to a specific ref if you require deterministic behavior over time.
+
 ## Local Parity
 Replicate the same gates before opening a PR:
 ```bash
