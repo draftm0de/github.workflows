@@ -24,7 +24,6 @@ on:
 jobs:
   draftmode-flutter-ci:
     uses: draftm0de/github.workflows/.github/workflows/flutter-ci.yml@main
-    with: {}
     secrets: inherit
 ```
 The `secrets: inherit` line lets the called workflow use the same repository secrets (e.g., for private pub servers). Override behavior by forking this repo or pinning to a specific ref if you require deterministic behavior over time.
