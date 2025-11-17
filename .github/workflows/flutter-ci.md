@@ -18,7 +18,8 @@ Reference the workflow from another repository via `workflow_call` so you stay o
 # .github/workflows/ci.yml in your repo
 name: Flutter CI
 
-on: [pull_request]
+on: 
+  pull_request:
 
 jobs:
   draftmode-flutter-ci:
