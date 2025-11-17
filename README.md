@@ -15,11 +15,3 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 - [`flutter-auto-tagging`](.github/actions/flutter-auto-tagging/README.md) — Parses `pubspec.yaml`, validates existing tags, and emits both the current and next semantic versions.
 - [`flutter-test`](.github/actions/flutter-test/README.md) — Sets up Flutter, verifies generated localizations, enforces formatting/analyzer rules, and runs the project’s test suite.
 
-## Related DraftMode Packages
-These sibling repositories consume the workflows/actions above to keep tooling consistent across the ecosystem:
-
-- [`draftmode_worker`](https://github.com/draftm0de/flutter.worker)
-- [`draftmode_example`](https://github.com/draftm0de/flutter.example)
-- [`draftmode_formatter`](https://github.com/draftm0de/flutter.formatter)
-- [`draftmode_localization`](https://github.com/draftm0de/flutter.localization)
-- [`draftmode_ui`](https://github.com/draftm0de/flutter.ui)
