@@ -15,7 +15,7 @@ Add a workflow in your downstream repo that either calls this one via `workflow_
 
 ```yaml
 # .github/workflows/release.yml in your repo
-name: Release
+name: Flutter Release
 
 on:
   push:

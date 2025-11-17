@@ -16,7 +16,7 @@ Reference the workflow from another repository via `workflow_call` so you stay o
 
 ```yaml
 # .github/workflows/ci.yml in your repo
-name: CI
+name: Flutter CI
 
 on: [pull_request]
 
