@@ -32,7 +32,7 @@ jobs:
       - name: Verify auto-tagging
         # Run the shared action that parses pubspec.yaml and predicts the next tag.
         id: pubspec
-        uses: ./.github/actions/flutter-auto-tagging
+        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging
 
   tests:
     if: github.repository != 'draftm0de/github.workflows' && github.repository != 'draftm0de/flutter.clone'
@@ -50,8 +50,8 @@ jobs:
       - name: Verify auto-tagging
         id: pubspec
         # Re-run to ensure every test matrix leg has the pubspec metadata handy.
-        uses: ./.github/actions/flutter-auto-tagging
+        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging
 
       - name: Run formatter/analyzer/tests
         # Composite action orchestrates Flutter setup and quality gates.
-        uses: ./.github/actions/flutter-test
+        uses: draftm0de/github.workflows/.github/actions/flutter-test
