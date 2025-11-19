@@ -14,7 +14,7 @@ This workflow automates the pubspec bump + git tagging flow whenever `main` adva
 Add a workflow in your downstream repo that either calls this one via `workflow_call` or uses the file as a template. Calling keeps you on the canonical implementation:
 
 ```yaml
-# .github/workflows/release.yml in your repo
+# .github/workflows/flutter-release.yml in your repo
 name: Flutter Release
 
 on:
