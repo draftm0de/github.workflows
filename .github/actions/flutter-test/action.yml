@@ -32,6 +32,7 @@ runs:
 
     - name: Flutter pub get
       run: flutter pub get
+      shell: bash
       # Install package dependencies before formatting/testing.
 
     - name: Generate localizations and verify they are commited
@@ -50,16 +51,20 @@ runs:
         else
           echo "::notice::No l10n.yaml found → skipping localization verification"
         fi        
+      shell: bash
       # Prevents drift between generated localization artifacts and source.
 
     - name: Enforce formatting
       run: dart format --output=none --set-exit-if-changed .
+      shell: bash
       # Fails if any Dart file is not formatted.
 
     - name: Analyze
       run: dart analyze .
+      shell: bash
       # Static analysis gate.
 
     - name: Run tests
       run: flutter test
+      shell: bash
       # Executes suite; bubbles up exit code for CI.
