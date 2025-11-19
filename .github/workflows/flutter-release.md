@@ -20,6 +20,9 @@ name: Flutter Release
 on:
   push:
     branches: [main]
+    
+permissions:
+  contents: write    
 
 jobs:
   draftmode-flutter-release:
