@@ -50,8 +50,8 @@ jobs:
       - name: Verify auto-tagging
         id: pubspec
         # Re-run to ensure every test matrix leg has the pubspec metadata handy.
-        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging
+        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging@main
 
       - name: Run formatter/analyzer/tests
         # Composite action orchestrates Flutter setup and quality gates.
-        uses: draftm0de/github.workflows/.github/actions/flutter-test
+        uses: draftm0de/github.workflows/.github/actions/flutter-test@main

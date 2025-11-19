@@ -33,7 +33,7 @@ jobs:
       - name: Build auto-tagging
         # Reuse shared action that derives current and next semantic versions.
         id: pubspec
-        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging
+        uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging@main
 
       - name: Patch pubspec.yaml
         if: steps.pubspec.outputs.new_version_with_build != ''
