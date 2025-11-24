@@ -13,7 +13,18 @@ on:
       - reopened
       - ready_for_review
   workflow_dispatch:
+    inputs:
+      pub-cache-key:
+        description: Optional cache key passed to the flutter-test action.
+        required: false
+        default: ''
   workflow_call:
+    inputs:
+      pub-cache-key:
+        description: Optional cache key passed to the flutter-test action.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   verify-version-tag:
@@ -55,3 +66,5 @@ jobs:
       - name: Run formatter/analyzer/tests
         # Composite action orchestrates Flutter setup and quality gates.
         uses: draftm0de/github.workflows/.github/actions/flutter-test@main
+        with:
+          pub-cache-key: ${{ github.event.inputs.pub-cache-key || '' }}

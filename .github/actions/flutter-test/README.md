@@ -18,6 +18,18 @@ Composite action that mirrors the DraftMode Flutter CI gate locally: set up Flut
 ```
 This action assumes the calling repo already contains a valid Flutter app or package. Add any additional quality gates upstream (e.g., code generation) before invoking it.
 
+## Inputs
+- `pub-cache-key` *(optional)* — override the cache key for `~/.pub-cache` and `.dart_tool`. When omitted, the action hashes any `pubspec.lock` and `pubspec.yaml` files so packages without a checked-in lockfile still get deterministic caches.
+
+When you set `pub-cache-key`, include every signal that should invalidate the cache (e.g., lockfile hash, Flutter channel, branch). A simple pattern is:
+```yaml
+- name: Run Flutter gate
+  uses: ./.github/actions/flutter-test
+  with:
+    pub-cache-key: ${{ runner.os }}-pub-${{ github.ref_name }}-${{ hashFiles('**/pubspec.yaml') }}
+```
+If the key stays static while dependencies change, GitHub Actions may restore stale packages, so make sure the expression reflects the inputs that matter in your workflow.
+
 ## Local Testing
 Mirror the same steps manually before pushing a branch:
 ```bash

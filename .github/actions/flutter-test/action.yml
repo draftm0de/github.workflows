@@ -1,6 +1,14 @@
 name: flutter-test
 description: flutter-test
 
+inputs:
+  pub-cache-key:
+    description: >-
+      Optional cache key for pub dependencies. Defaults to combining the runner
+      OS with the hashes of any pubspec.lock/pubspec.yaml files.
+    required: false
+    default: ''
+
 # Composite action that mirrors the full CI gate: setup Flutter, enforce
 # formatting/analyzer cleanliness, ensure localization is checked in, and run tests.
 
@@ -25,9 +33,9 @@ runs:
         path: |
           ~/.pub-cache
           **/.dart_tool
-        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        key: ${{ inputs.pub-cache-key != '' && inputs.pub-cache-key || format('{0}-pub-{1}', runner.os, hashFiles('**/pubspec.lock', '**/pubspec.yaml')) }}
         restore-keys: |
-          ${{ runner.os }}-pub-
+          ${{ format('{0}-pub-', runner.os) }}
       # Warms the pub cache so repeated workflow runs stay fast.
 
     - name: Flutter pub get

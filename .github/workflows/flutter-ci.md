@@ -25,8 +25,14 @@ jobs:
   draftmode-flutter-ci:
     uses: draftm0de/github.workflows/.github/workflows/flutter-ci.yml@main
     secrets: inherit
+    with:
+      pub-cache-key: ${{ runner.os }}-pub-${{ github.ref_name }}-${{ hashFiles('**/pubspec.yaml') }}
 ```
 The `secrets: inherit` line lets the called workflow use the same repository secrets (e.g., for private pub servers). Override behavior by forking this repo or pinning to a specific ref if you require deterministic behavior over time.
+
+### Inputs
+- `pub-cache-key` *(string, optional)* — forwarded to the `flutter-test` action to influence how `~/.pub-cache`/`.dart_tool` are cached. Provide the same expression you’d pass directly to the composite action so package downloads stay scoped to the signals you care about. When omitted (or when the workflow runs on pull requests), the action falls back to hashing any `pubspec.lock`/`pubspec.yaml` files it finds.
+  - For manual `workflow_dispatch` runs, the new input shows up as a textbox so you can test different caching strategies without editing YAML.
 
 ## Local Parity
 Replicate the same gates before opening a PR:
