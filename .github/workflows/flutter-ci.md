@@ -15,7 +15,7 @@ This workflow guards DraftMode Flutter packages by enforcing formatting, analyze
 Reference the workflow from another repository via `workflow_call` so you stay on the latest automation, or copy it verbatim if you need further tweaks.
 
 ```yaml
-# .github/workflows/flutter-ci.yml in your repo
+# .GitHub/workflows/flutter-ci.yml in your repo
 name: Flutter CI
 
 on: 
