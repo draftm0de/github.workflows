@@ -1,0 +1,114 @@
+name: Node JS CI
+
+# Primary guardrail workflow that ensures every consuming repo keeps formatting,
+# static analysis, tests, and semantic versioning in sync before merging.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      node-version:
+        description: Optional Node.js version.
+        required: false
+        default: '22'
+      lint-script:
+        description: npm script to lint the repo (set blank to skip).
+        required: false
+        default: 'lint'
+      prettier-script:
+        description: npm script that runs Prettier in check mode (set blank to skip).
+        required: false
+        default: 'format:check'
+      badges-script:
+        description: npm script that refreshes README/coverage badges (set blank to skip).
+        required: false
+        default: 'badges'
+      test-script:
+        description: npm script that runs the test suite (set blank to skip).
+        required: false
+        default: 'test'
+  workflow_call:
+    inputs:
+      node-version:
+        description: Optional Node.js version.
+        required: false
+        type: string
+        default: '22'
+      lint-script:
+        description: npm script to lint the repo (set blank to skip).
+        required: false
+        type: string
+        default: 'lint'
+      prettier-script:
+        description: npm script that runs Prettier in check mode (set blank to skip).
+        required: false
+        type: string
+        default: 'format:check'
+      badges-script:
+        description: npm script that refreshes README/coverage badges (set blank to skip).
+        required: false
+        type: string
+        default: 'badges'
+      test-script:
+        description: npm script that runs the test suite (set blank to skip).
+        required: false
+        type: string
+        default: 'test'
+
+env:
+  NODE_VERSION: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['node-version'] != '' && github.event.inputs['node-version'] || '22' }}
+  LINT_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['lint-script'] != '' && github.event.inputs['lint-script'] || 'lint' }}
+  PRETTIER_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['prettier-script'] != '' && github.event.inputs['prettier-script'] || 'format:check' }}
+  BADGES_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['badges-script'] != '' && github.event.inputs['badges-script'] || 'badges' }}
+  TEST_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['test-script'] != '' && github.event.inputs['test-script'] || 'test' }}
+
+jobs:
+  verify-version-tag:
+    if: github.repository != 'draftm0de/github.workflows'
+    # This repo only hosts templates, so bail if someone triggers workflow here.
+    # Always validate semantic version/tag parity before doing any heavy work.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # Need full history so tag validation can see prior releases.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify auto-tagging
+        # Run the shared action that parses package.json and predicts the next tag.
+        id: version_file
+        uses: ./.github/actions/node-js-auto-tagging
+
+  tests:
+    if: github.repository != 'draftm0de/github.workflows' && github.repository != 'draftm0de/flutter.clone'
+    # Skip both this catalog repo and the clone mirror that shouldn't run tests.
+    needs: verify-version-tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        # Fetch code again because each job operates in its own runner workspace.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Node Js tests
+        # Composite action orchestrates Node setup and quality gates.
+        uses: ./.github/actions/node-js-test
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          enable-cache: 'true'
+          lint-script: ${{ env.LINT_SCRIPT }}
+          prettier-script: ${{ env.PRETTIER_SCRIPT }}
+          badges-script: ''
+          test-script: ${{ env.TEST_SCRIPT }}

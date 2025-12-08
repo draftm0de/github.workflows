@@ -1,0 +1,116 @@
+name: Build Docker Image
+description: Build a Docker image and store it as a workflow artifact
+
+inputs:
+  image:
+    description: Docker image name (defaults to :latest when no tag is provided)
+    required: true
+  target:
+    description: Optional multi-stage build target name
+    required: false
+  context:
+    description: Build context directory
+    required: false
+    default: .
+  reproducible:
+    description: When true, use docker buildx to produce reproducible layers
+    required: false
+    default: 'false'
+  options:
+    description: Additional docker build flags appended verbatim
+    required: false
+  build-args-file:
+    description: Relative path (from context) to a KEY=VALUE file consumed as --build-arg entries
+    required: false
+
+outputs:
+  digest:
+    description: Docker image digest produced by the build
+    value: ${{ steps.build-image.outputs.digest }}
+  artifact:
+    description: Artifact handle referencing the saved Docker image (name/path)
+    value: ${{ steps.upload.outputs.artifact }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare build arguments
+      id: arguments
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Preparing build arguments"
+
+        build_options="${{ inputs.options }}"
+
+        context="${{ inputs.context }}"
+        build_args_file_input="${{ inputs.build-args-file }}"
+        if [ -n "$build_args_file_input" ]; then
+          build_args_file="$context/$build_args_file_input"
+          if [ -f "$build_args_file" ]; then
+            echo "> build args from file: $build_args_file"
+            build_args=$(awk -F"=" '{ printf " --build-arg %s=%s", $1, $2 }' "$build_args_file")
+            build_options="$build_options$build_args"
+          else
+            echo "::error::Build-args file not found: $build_args_file"
+            exit 1
+          fi
+        fi
+
+        image="${{ inputs.image }}"
+        if [[ "$image" == *":"* ]]; then
+          image_name="${image%%:*}"
+          image_tag="${image#*:}"
+        else
+          image_name="$image"
+          image_tag="latest"
+        fi
+
+        tag="$image_name:$image_tag"
+        build_options="$build_options --tag $tag"
+
+        if [ -n "${{ inputs.target }}" ]; then
+          echo "> target: ${{ inputs.target }}"
+          build_options="$build_options --target ${{ inputs.target }}"
+        fi
+
+        echo "> context: $context"
+        build_options="$build_options $context"
+        echo "> tag: $tag"
+
+        echo "::endgroup::"
+        echo "build_options=$build_options" >> "$GITHUB_OUTPUT"
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Docker Buildx for reproducible images
+      if: ${{ inputs.reproducible == 'true' }}
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      id: build-image
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Building docker image"
+
+        options="${{ steps.arguments.outputs.build_options }}"
+        if [ "${{ inputs.reproducible }}" = 'true' ]; then
+          echo "> using docker buildx for reproducible build"
+          SOURCE_DATE_EPOCH=0 docker buildx build --no-cache --output type=docker,rewrite-timestamp=true $options
+        else
+          echo "> using docker build"
+          docker build $options
+        fi
+
+        tag="${{ steps.arguments.outputs.tag }}"
+        digest=$(docker inspect --format='{{.Id}}' "$tag")
+        echo "> digest: $digest"
+
+        echo "::endgroup::"
+        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+    - name: Upload Docker image
+      id: upload
+      uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
+      with:
+        image: ${{ steps.arguments.outputs.tag }}

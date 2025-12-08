@@ -1,0 +1,62 @@
+name: Load Docker Image From Artifact
+description: Load a Docker image previously stored as an artifact
+
+inputs:
+  artifact:
+    description: Fully qualified artifact reference (artifact-name/path/to/file.tar)
+    required: true
+
+outputs:
+  image:
+    description: Loaded Docker image reference
+    value: ${{ steps.load.outputs.image }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare Docker image download
+      id: prepare
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Preparing docker image download"
+
+        artifact="${{ inputs.artifact }}"
+        if [[ "$artifact" == */* ]]; then
+          artifact_name="${artifact%%/*}"
+          artifact_file="${artifact#*/}"
+        else
+          echo "::error::Artifact input must be in 'name/path' form"
+          exit 1
+        fi
+
+        echo "> artifact name: $artifact_name"
+        echo "> artifact file: $artifact_file"
+
+        echo "::endgroup::"
+        echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+        echo "artifact_file=$artifact_file" >> "$GITHUB_OUTPUT"
+
+    - name: Download Docker image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ steps.prepare.outputs.artifact_name }}
+        path: .artifact
+
+    - name: Load Docker image
+      id: load
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Loading Docker image"
+
+        file=".artifact/${{ steps.prepare.outputs.artifact_file }}"
+        image=$(docker load --input "$file" | awk '/Loaded image:/ { print $3 }')
+        if [ -z "$image" ]; then
+          echo "::error::Failed to load image name from artifact output"
+          exit 1
+        fi
+        echo "> loaded image: $image"
+
+        echo "::endgroup::"
+        echo "image=$image" >> "$GITHUB_OUTPUT"

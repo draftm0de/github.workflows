@@ -1,0 +1,115 @@
+name: Push Docker Image
+description: Push a Docker image (or saved artifact) to a registry
+
+inputs:
+  image:
+    description: Local Docker image name to push
+    required: false
+  artifact:
+    description: Artifact identifier (name/path) to load an image from
+    required: false
+  target:
+    description: Optional retag to apply before pushing
+    required: false
+  docker-registry:
+    description: Registry hostname (defaults to Docker Hub)
+    required: false
+  docker-username:
+    description: Registry username override
+    required: false
+  secret-docker-token:
+    description: Docker/registry token or password
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Load Docker image from artifact
+      id: load-image
+      if: ${{ inputs.artifact != '' }}
+      uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+      with:
+        artifact: ${{ inputs.artifact }}
+
+    - name: Prepare push arguments
+      id: arguments
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Preparing docker push arguments"
+
+        from_artifact="${{ inputs.artifact }}"
+        from_image="${{ inputs.image }}"
+
+        if [ -n "$from_artifact" ]; then
+          image="${{ steps.load-image.outputs.image }}"
+          if [ -z "$image" ]; then
+            echo "::error::Failed to load image reference from artifact"
+            exit 1
+          fi
+          echo "> image: $image (loaded from artifact)"
+        elif [ -n "$from_image" ]; then
+          image="$from_image"
+          echo "> image: $image (provided input)"
+        else
+          echo "::error::Neither artifact nor image input provided"
+          exit 1
+        fi
+
+        if ! docker inspect --type=image "$image" >/dev/null 2>&1; then
+          echo "::error::Image $image is not available locally"
+          exit 1
+        fi
+
+        docker_username="${{ inputs.docker-username }}"
+        candidate="$image"
+        if [ -n "${{ inputs.target }}" ]; then
+          candidate="${{ inputs.target }}"
+        fi
+        if [ -z "$docker_username" ]; then
+          docker_username="${candidate%%/*}"
+          if [ "$docker_username" = "$candidate" ]; then
+            echo "::error::Could not infer docker-username from $image"
+            exit 1
+          fi
+        fi
+        echo "> docker username: $docker_username"
+
+        echo "::endgroup::"
+        echo "image=$image" >> "$GITHUB_OUTPUT"
+        echo "docker_username=$docker_username" >> "$GITHUB_OUTPUT"
+
+    - name: Login to registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.docker-registry }}
+        username: ${{ steps.arguments.outputs.docker_username }}
+        password: ${{ inputs.secret-docker-token }}
+
+    - name: Push Docker image
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Pushing docker image"
+
+        image="${{ steps.arguments.outputs.image }}"
+        target="${{ inputs.target }}"
+        registry="${{ inputs.docker-registry }}"
+
+        if [ -n "$target" ]; then
+          docker tag "$image" "$target"
+          echo "> tagged $image as $target"
+          image="$target"
+        fi
+
+        if [ -n "$registry" ]; then
+          tagged="$registry/$image"
+          docker tag "$image" "$tagged"
+          echo "> namespaced $image as $tagged"
+          image="$tagged"
+        fi
+
+        echo "> push: $image"
+        docker push "$image"
+
+        echo "::endgroup::"

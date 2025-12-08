@@ -1,0 +1,62 @@
+name: Docker Push Image
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Source docker image name
+        required: false
+        type: string
+      artifact:
+        description: Artifact handle used to load the source image
+        required: false
+        type: string
+      target:
+        description: Target docker image name (defaults to source)
+        required: false
+        type: string
+      docker-username:
+        description: Registry username override
+        required: false
+        type: string
+      docker-registry:
+        description: Registry hostname (default: Docker Hub)
+        required: false
+        type: string
+    secrets:
+      DOCKER_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::group::Preparing push arguments"
+
+          if [ -n "${{ inputs.image }}" ]; then
+            echo "> pushing from provided image"
+          elif [ -n "${{ inputs.artifact }}" ]; then
+            echo "> pushing from artifact"
+          else
+            echo "::error::Neither 'image' nor 'artifact' input specified"
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+      - name: Push Docker image
+        uses: draftm0de/github.workflows/.github/actions/docker-push@main
+        with:
+          image: ${{ inputs.image }}
+          artifact: ${{ inputs.artifact }}
+          target: ${{ inputs.target }}
+          docker-username: ${{ inputs.docker-username }}
+          docker-registry: ${{ inputs.docker-registry }}
+          secret-docker-token: ${{ secrets.DOCKER_TOKEN }}
