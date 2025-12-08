@@ -4,6 +4,7 @@ Composite action that installs Node.js dependencies, runs linting/formatting/bad
 
 ## Inputs
 - `node-version` *(default `22`)* — Version passed to `actions/setup-node`.
+- `enable-cache` *(default `true`)* — When true, `actions/setup-node` caches npm dependencies via `package-lock.json`.
 - `lint-script` *(default `lint`)* — Name of the npm script that lints the project. Set to empty to skip.
 - `prettier-script` *(default `format:check`)* — npm script responsible for running Prettier in check mode. Leave empty to skip.
 - `badges-script` *(default `badges`)* — npm script that updates README/coverage badges. Leave empty to skip.

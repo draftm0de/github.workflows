@@ -39,6 +39,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: ${{ inputs.enable-cache == 'true' && 'npm' || '' }}
+        cache-dependency-path: ${{ inputs.enable-cache == 'true' && '**/package-lock.json' || '' }}
       # Installs the requested Node version and optionally caches npm dependencies.
 
     - name: Install dependencies
