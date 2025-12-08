@@ -97,7 +97,7 @@ jobs:
       - name: Verify auto-tagging
         # Run the shared action that parses package.json and predicts the next tag.
         id: version_file
-        uses: ./.github/actions/node-js-auto-tagging
+        uses: draftm0de/github.workflows/.github/actions/node-js-auto-tagging
 
   tests:
     if: github.repository != 'draftm0de/github.workflows' && github.repository != 'draftm0de/flutter.clone'
@@ -114,7 +114,7 @@ jobs:
 
       - name: Run Node Js tests
         # Composite action orchestrates Node setup and quality gates.
-        uses: ./.github/actions/node-js-test
+        uses: .draftm0de/github.workflows/.github/actions/node-js-test
         with:
           node-version: ${{ env.NODE_VERSION }}
           enable-cache: ${{ env.ENABLE_CACHE }}
