@@ -118,7 +118,7 @@ jobs:
 
       - name: Run Node Js tests
         # Composite action orchestrates Node setup and quality gates.
-        uses: .draftm0de/github.workflows/.github/actions/node-js-test@main
+        uses: draftm0de/github.workflows/.github/actions/node-js-test@main
         with:
           node-version: ${{ env.NODE_VERSION }}
           enable-cache: ${{ env.ENABLE_CACHE }}
