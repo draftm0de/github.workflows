@@ -6,50 +6,54 @@ description: node-js-test
 # scripts so consuming repos can mirror the CI workflow locally.
 
 inputs:
-  node-version:
+  node_version:
     description: "Node.js version to install via actions/setup-node"
     required: false
     default: ''
-  node-version-env:
+  node_version_env:
     description: "Path to an env file that exports NODE_VERSION (file is sourced with set -a)"
     required: false
     default: ''
-  enable-cache:
+  enable_cache:
     description: "Enable npm dependency caching (requires package-lock.json)"
     required: false
     default: 'true'
-  lint-script:
+  lint_script:
     description: "npm script responsible for linting"
     required: false
-    default: 'lint'
-  prettier-script:
-    description: "npm script that runs Prettier in check mode"
-    required: false
-    default: 'format:check'
-  badges-script:
-    description: "Optional npm script that refreshes README/coverage badges"
-    required: false
-    default: 'badges'
-  test-script:
+    default: ''
+  test_script:
     description: "npm script that executes the test suite"
     required: false
-    default: 'test'
+    default: ''
+  prettier_script:
+    description: "npm script that runs Prettier in check mode"
+    required: false
+    default: ''
+  badges_script:
+    description: "Optional npm script that refreshes README/coverage badges"
+    required: false
+    default: ''
 
 runs:
   using: "composite"
   steps:
-    - name: Set Node Version
+    - name: Config Test
       shell: bash
-      id: node-version
+      id: config
       run: |
         set -euo pipefail
 
-        ENV_FILE="${{ inputs.node-version-env }}"
-        NODE_VERSION="${{ inputs.node-version }}"
+        ENV_FILE="${{ inputs.node_version_env }}"
+        INPUT_NODE_VERSION="${{ inputs.node_version }}"
+        
+        # Defaults
+        source_label="inputs.node-version"
+        NODE_VERSION="$INPUT_NODE_VERSION"        
 
         if [ -n "$ENV_FILE" ]; then
           if [ ! -f "$ENV_FILE" ]; then
-            echo "::error::node-version-env ($ENV_FILE) is set but file not found."
+            echo "::error::node_version_env ($ENV_FILE) is set but file not found."
             exit 1
           fi
 
@@ -59,22 +63,17 @@ runs:
           set +a
 
           if [ -z "${NODE_VERSION:-}" ]; then
-            echo "::error::node-version-env ($ENV_FILE) does not set NODE_VERSION=..."
+            echo "::error::node_version_env ($ENV_FILE) does not set NODE_VERSION=..."
             exit 1
           fi
-
+          source_label="$ENV_FILE"
           echo "::notice::NODE_VERSION sourced from $ENV_FILE"
         else
           if [ -z "${NODE_VERSION:-}" ]; then
             echo "::error::node-version not provided as inputs.node-version"
             exit 1
           fi
-        echo "::notice::NODE_VERSION used from inputs.node-version"
-        fi
-
-        source_label="inputs.node-version"
-        if [ -n "$ENV_FILE" ]; then
-          source_label="$ENV_FILE"
+          echo "::notice::NODE_VERSION used from inputs.node-version"
         fi
 
         echo "::notice::use node-version: $NODE_VERSION"
@@ -87,7 +86,7 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: ${{ steps.node-version.outputs.version }}
+        node-version: ${{ steps.config.outputs.version }}
         cache: ${{ inputs.enable-cache == 'true' && 'npm' || '' }}
         cache-dependency-path: ${{ inputs.enable-cache == 'true' && '**/package-lock.json' || '' }}
       # Installs the requested Node version and optionally caches npm dependencies.
@@ -114,10 +113,11 @@ runs:
       # Enforces package-lock.json for reproducible installs.
 
     - name: Run lint script
+      if: inputs.lint_script != ''
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.lint-script }}"
+        SCRIPT="${{ inputs.lint_script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Lint script input empty → skipping lint step."
@@ -135,10 +135,11 @@ runs:
       # Enforces lint parity via the configured npm script.
 
     - name: Run prettier script
+      if: inputs.prettier_script != ''
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.prettier-script }}"
+        SCRIPT="${{ inputs.prettier_script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Prettier script input empty → skipping formatting check."
@@ -156,10 +157,11 @@ runs:
       # Verifies Prettier formatting stays consistent.
 
     - name: Refresh badges
+      if: inputs.badges_script != ''
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.badges-script }}"
+        SCRIPT="${{ inputs.badges_script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Badge script input empty → skipping badge refresh."
@@ -177,10 +179,11 @@ runs:
       # Keeps README/coverage badges updated via a repo-defined script.
 
     - name: Run tests
+      if: inputs.test_script != ''
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.test-script }}"
+        SCRIPT="${{ inputs.test_script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Test script input empty → skipping tests."

@@ -63,13 +63,13 @@ jobs:
       - name: Run node js tests
         uses: draftm0de/github.workflows/.github/actions/node-js-test@main
         with:
-          node-version: ${{ inputs.node_version }}
-          node-version-env: ${{ inputs.node_version_env }}
-          enable-cache: ${{ inputs.enable_cache }}
-          lint-script: ${{ inputs.lint_script }}
-          prettier-script: ${{ inputs.prettier_script }}
-          badges-script: ${{ inputs.badges_script }}
-          test-script: ${{ inputs.test_script }}
+          node_version: ${{ inputs.node_version }}
+          node_version_env: ${{ inputs.node_version_env }}
+          enable_cache: ${{ inputs.enable_cache }}
+          lint_script: ${{ inputs.lint_script }}
+          prettier_script: ${{ inputs.prettier_script }}
+          badges_script: ${{ inputs.badges_script }}
+          test_script: ${{ inputs.test_script }}
 
   build_on_pull:
     name: Build (pull request)
