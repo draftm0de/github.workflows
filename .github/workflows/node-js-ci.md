@@ -52,4 +52,4 @@ In this setup the reusable workflow automatically skips the push tests whenever 
 
 ## Pull Request Guard
 
-The workflow delegates branch-deduplication to `.github/actions/git-state`, which reads `${{ secrets.GITHUB_TOKEN }}` to query the pull request API via the GitHub CLI (`gh`). Hosted runners ship with `gh` preinstalled. Self-hosted runners must provide the CLI and set `GITHUB_TOKEN`/`GH_TOKEN` environment variables so the action can authenticate. The action exposes outputs `exists`, `count`, and `ci-open-pull-requests` for backwards compatibility.
+The workflow delegates branch-deduplication to `.github/actions/git-state`, which reads `${{ secrets.GITHUB_TOKEN }}` to query the pull request API via the GitHub CLI (`gh`). Hosted runners ship with `gh` preinstalled. Self-hosted runners must provide the CLI and set `GITHUB_TOKEN`/`GH_TOKEN` environment variables so the action can authenticate. The action exposes a single `ci-open-pull-requests` output (plus a step-summary line) that reports whether the branch already has an open pull request.
