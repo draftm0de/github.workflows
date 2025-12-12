@@ -8,14 +8,8 @@ inputs:
     default: ''
 
 outputs:
-  exists:
-    description: "'true' if any open pull requests target the current branch"
-    value: ${{ steps.pull_request.outputs.exists }}
-  count:
-    description: Number of matching open pull requests
-    value: ${{ steps.pull_request.outputs.count }}
   ci-open-pull-requests:
-    description: "Backwards compatible alias for `exists`"
+    description: "Whether the current branch already has an open pull request"
     value: ${{ steps.pull_request.outputs.exists }}
 
 runs:
@@ -35,8 +29,8 @@ runs:
           echo "::notice::PR existence verification skipped, no github-token provided"
           {
             echo "exists=false"
-            echo "count=0"
           } >> "$GITHUB_OUTPUT"
+          echo "- [x] ci-open-pull-requests=false (token missing)" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi
 
@@ -66,5 +60,17 @@ runs:
 
         {
           echo "exists=$exists"
-          echo "count=$prs"
         } >> "$GITHUB_OUTPUT"
+
+        summary_prefix="- [x]"
+        summary_body="No open pull requests"
+        if [ "$exists" = true ]; then
+          summary_prefix="- [ ]"
+          if [ "$prs" -eq 1 ]; then
+            summary_body="1 open pull request"
+          else
+            summary_body="$prs open pull requests"
+          fi
+        fi
+
+        echo "$summary_prefix ci-open-pull-requests=$exists ($summary_body)" >> "$GITHUB_STEP_SUMMARY"
