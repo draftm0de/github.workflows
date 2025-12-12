@@ -33,15 +33,15 @@ Pair this action with [`artifact-to-image`](../artifact-to-image) or the `docker
 
 Below is an example of how to use this action in your workflow:
 
-```
+```yaml
 jobs:
   save-docker-image:
     runs-on: ubuntu-latest
     steps:
       - name: Save and upload Docker image
-        uses: ./.github/actions/artifact-from-image
+        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
         with:
           image: myrepo/myimage:1.0
+```
 
 The resulting artifact name is exposed via the `artifact` output (in `name/path` format) and echoed inside the workflow summary, making it easy to pass to [`artifact-to-image`](../artifact-to-image) or other publishing steps.
-```

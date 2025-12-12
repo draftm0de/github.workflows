@@ -3,13 +3,15 @@
 Composite action that installs Node.js dependencies, runs linting/formatting/badge scripts, and finishes with the repository’s test suite so pull requests mirror DraftMode’s Node CI workflow.
 
 ## Inputs
-- `node-version` *(default `22`)* — Version passed to `actions/setup-node`.
-- `node-version-env` *(default `''`)* — Path to an env file that exposes `NODE_VERSION=<value>`. The file is sourced via `set -a; source <file>; set +a`, so only point it to trusted `.env` files. When present it overrides `node-version`.
-- `enable-cache` *(default `true`)* — When true, `actions/setup-node` caches npm dependencies via `package-lock.json`.
-- `lint-script` *(default `lint`)* — Name of the npm script that lints the project. Set to empty to skip.
-- `prettier-script` *(default `format:check`)* — npm script responsible for running Prettier in check mode. Leave empty to skip.
-- `badges-script` *(default `badges`)* — npm script that updates README/coverage badges. Leave empty to skip.
-- `test-script` *(default `test`)* — npm script that runs the test suite. Leave empty to skip (not recommended).
+| Name | Description | Required | Default |
+| --- | --- | --- | --- |
+| `node-version` | Version passed to `actions/setup-node`. | No | `22` |
+| `node-version-env` | Path to an env file that exports `NODE_VERSION=<value>`. The file is sourced via `set -a; source <file>; set +a`, so only point it to trusted `.env` files. When present it overrides `node-version`. | No | `''` |
+| `enable-cache` | Enables npm caching in `actions/setup-node` when `true`. | No | `true` |
+| `lint-script` | npm script that lints the project. Set to empty to skip. | No | `lint` |
+| `prettier-script` | npm script that runs Prettier in check mode. Leave empty to skip. | No | `format:check` |
+| `badges-script` | npm script that updates README/coverage badges. Leave empty to skip. | No | `badges` |
+| `test-script` | npm script that runs the test suite. Leave empty to skip (not recommended). | No | `test` |
 
 ## Behavior
 1. Checks out the caller repo and installs the requested Node.js version (with npm cache warming). If `node-version-env` is provided it sources the file to read `NODE_VERSION`, mimicking local workflows that centralize the version in `.env`/`.nvmrc`.

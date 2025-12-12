@@ -3,14 +3,14 @@
 Composite action that loads a Docker image (either from the local daemon or a saved artifact), retags it if needed, logs into a registry, and performs `docker push`.
 
 ## Inputs
-| Name | Description | Required | Default |
-| --- | --- | --- | --- |
-| `image` | Local Docker image reference to push. | No | — |
-| `artifact` | Artifact handle (`name/path`) created by [`artifact-from-image`](../artifact-from-image). | No | — |
-| `target` | Optional tag applied prior to pushing (useful for promoting digests). | No | — |
-| `docker-username` | Explicit registry username. Falls back to parsing the target reference. | No | — |
-| `docker-registry` | Registry domain (leave blank for Docker Hub). | No | — |
-| `secret-docker-token` | Password or token passed to `docker/login-action`. | Yes | — |
+| Name                  | Description                                                                               | Required | Default |
+|-----------------------|-------------------------------------------------------------------------------------------|----------|---------|
+| `image`               | Local Docker image reference to push.                                                     | No       | —       |
+| `artifact`            | Artifact handle (`name/path`) created by [`artifact-from-image`](../artifact-from-image). | No       | —       |
+| `target`              | Optional tag applied prior to pushing (useful for promoting digests).                     | No       | —       |
+| `docker-username`     | Explicit registry username. Falls back to parsing the target reference.                   | No       | —       |
+| `docker-registry`     | Registry domain (leave blank for Docker Hub).                                             | No       | —       |
+| `secret-docker-token` | Password or token passed to `docker/login-action`.                                        | Yes      | —       |
 
 > Either `image` or `artifact` must be supplied.
 

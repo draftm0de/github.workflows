@@ -17,7 +17,7 @@ runs:
   steps:
     - name: Tag calculation
       id: tags
-      uses: ./.github/actions/node-js-version-builder
+      uses: draftm0de/github.workflows/.github/actions/node-js-version-builder@main
 
     - name: Update package.json version
       id: patch
@@ -39,13 +39,13 @@ runs:
         fi
 
         node <<'NODE' "$FILE" "$VERSION"
-const fs = require('fs');
-const path = process.argv[1];
+const fs = require('node:fs');
+const manifestPath = process.argv[1];
 const newVersion = process.argv[2];
-const data = fs.readFileSync(path, 'utf8');
+const data = fs.readFileSync(manifestPath, 'utf8');
 const pkg = JSON.parse(data);
 pkg.version = newVersion;
-fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+fs.writeFileSync(manifestPath, JSON.stringify(pkg, null, 2) + '\n');
 NODE
 
         echo "updated_version=$VERSION" >> "$GITHUB_OUTPUT"

@@ -30,13 +30,13 @@ This GitHub Action enables loading a previously saved Docker image from an artif
 
 Below is an example of how to use this action in your workflow:
 
-```
+```yaml
 jobs:
   load-docker-image:
     runs-on: ubuntu-latest
     steps:
       - name: Load Docker Image
-        uses: ./
+        uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
         with:
           artifact: myartifact/image.tar
 ```

@@ -12,12 +12,16 @@ Composite action that derives the next semver tag directly from the source versi
 5. Verifies that neither the prefixed candidate, `v<next_tag_short>`, nor `<next_tag_short>` already exists.
 
 ## Inputs
-- `source-version`: Required version string (`<optional-prefix>x.y.z`).
+| Name | Description | Required | Default |
+| --- | --- | --- | --- |
+| `source-version` | Version string (`<optional-prefix>x.y.z`) used to enforce drift rules. | Yes | — |
 
 ## Outputs
-- `last_tag`: Latest git tag including the detected prefix (if any).
-- `last_tag_short`: Latest semver git tag (x.y.z) without prefix.
-- `next_tag`: Next git tag including the detected prefix (if any).
-- `next_tag_short`: Next tag to create (x.y.z) without prefix.
+| Name | Description |
+| --- | --- |
+| `last_tag` | Latest git tag including the detected prefix (if any). |
+| `last_tag_short` | Latest semver git tag (x.y.z) without prefix. |
+| `next_tag` | Next git tag including the detected prefix (if any). |
+| `next_tag_short` | Next tag to create (x.y.z) without prefix. |
 
 Use `next_tag_short` when updating source files that store bare versions and `next_tag` when creating annotated git tags.

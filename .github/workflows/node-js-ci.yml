@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/git-state
+      - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -84,7 +84,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run node js tests
-        uses: ./.github/actions/node-js-test
+        uses: draftm0de/github.workflows/.github/actions/node-js-test@main
         with:
           node-version: ${{ env.NODE_VERSION }}
           node-version-env: ${{ env.NODE_VERSION_ENV }}
@@ -106,7 +106,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build docker image
-        uses: ./.github/actions/docker-build
+        uses: draftm0de/github.workflows/.github/actions/docker-build@main
         id: build
         with:
           image: ${{ env.DOCKER_IMAGE }}
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload Docker image
         id: upload
-        uses: ./.github/actions/artifact-from-image
+        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
         with:
           image: ${{ steps.build.outputs.image }}
 
@@ -134,4 +134,4 @@ jobs:
           fetch-depth: 0
 
       - name: Build package and tag info
-        uses: ./.github/actions/node-js-version-builder
+        uses: draftm0de/github.workflows/.github/actions/node-js-version-builder@main

@@ -3,12 +3,18 @@
 Composite action that parses `pubspec.yaml`, validates existing git tags, and emits both the current and next semantic versions for downstream workflows.
 
 ## Inputs
-- `pubspec-path` (optional, default `pubspec.yaml`) — Override when the manifest lives elsewhere.
+| Name | Description | Required | Default |
+| --- | --- | --- | --- |
+| `pubspec-path` | Manifest path override when `pubspec.yaml` lives elsewhere. | No | `pubspec.yaml` |
 
 ## Outputs
-- `version` / `version_with_build` — The exact semver parsed from the manifest.
-- `build_metadata` — Any `+build` suffix that followed the base semver.
-- `new_version` / `new_version_with_build` — The computed patch bump that preserves build metadata when present.
+| Name | Description |
+| --- | --- |
+| `version` | Exact semver parsed from the manifest. |
+| `version_with_build` | Semver plus any `+build` suffix. |
+| `build_metadata` | `+build` suffix (if provided). |
+| `new_version` | Computed patch bump without build metadata. |
+| `new_version_with_build` | Patch bump that preserves build metadata. |
 
 ## How It Works
 1. Reads the supplied pubspec file, failing if the `version:` entry is missing or malformed.

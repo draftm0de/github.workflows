@@ -19,7 +19,7 @@ Composite action that checks if the current branch already has an open pull requ
 steps:
   - name: Check for existing pull requests
     id: git_pr_exists
-    uses: ./.github/actions/git-state
+    uses: draftm0de/github.workflows/.github/actions/git-state@main
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 

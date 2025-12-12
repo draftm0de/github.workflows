@@ -23,10 +23,10 @@ runs:
   steps:
     - name: Read package version
       id: pkg
-      uses: ./.github/actions/node-js-version-reader
+      uses: draftm0de/github.workflows/.github/actions/node-js-version-reader@main
 
     - name: Build git tag info
       id: tags
-      uses: ./.github/actions/git-tag-builder
+      uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
       with:
         source-version: ${{ steps.pkg.outputs.version }}
