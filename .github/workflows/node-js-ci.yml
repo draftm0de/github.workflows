@@ -36,6 +36,10 @@ on:
         description: docker image name
         required: false
         type: string
+      trigger_event:
+        description: Optional event name propagated from the caller (e.g., github.event_name)
+        required: true
+        type: string
 
 jobs:
   setup:
@@ -60,7 +64,7 @@ jobs:
   tests:
     name: Tests
     needs: setup
-    if: github.event_name == 'pull_request' || needs.setup.outputs.ci-open-pull-requests == 'false'
+    if: inputs.trigger_event == 'pull_request' || needs.setup.outputs.ci-open-pull-requests == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

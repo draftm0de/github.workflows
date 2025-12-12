@@ -16,8 +16,9 @@ Reusable workflow (`node-js-ci.yml`) that orchestrates linting, formatting, test
 | `badges_script`    | `''`    | npm script that refreshes README/coverage badges (`''` to skip). Blank defers to `badges`.                           |
 | `test_script`      | `''`    | npm script that runs the test suite (`''` to skip). Blank defers to `test`.                                          |
 | `docker_image`     | `''`    | When set, enables Docker build / artifact jobs for pull requests.                                                    |
+| `trigger_event`    | `''`    | Optional event name propagated from the caller (set to `${{ github.event_name }}`) so the workflow knows when it runs on pull requests. |
 
-Leaving `node_version` **and** `node_version_env` blank causes the downstream `node-js-test` action to fail fast, so provide one of them. Other blank script inputs simply inherit the composite action defaults noted above.
+Leave `trigger_event` blank only if you do not care about differentiating push vs. pull Request runs. When you pass `${{ github.event_name }}` downstream the workflow can always run tests for pull requests while selectively skipping duplicate push jobs. Leaving `node_version` **and** `node_version_env` blank causes the downstream `node-js-test` action to fail fast, so provide one of them. Other blank script inputs simply inherit the composite action defaults noted above.
 
 ## Secrets
 When invoked via `workflow_call`, inherit the caller’s secrets so the workflow can use `${{ secrets.GITHUB_TOKEN }}` for the `git-state` guard and any package-registry credentials you rely on. If secrets are not inherited the action defaults to `exists=false`, meaning tests will always run on pushes.
@@ -47,6 +48,7 @@ jobs:
       prettier_script: ''        # skip prettier step
       test_script: 'test:ci'
       docker_image: ghcr.io/my-org/my-app:${{ github.sha }}
+      trigger_event: ${{ github.event_name }}
     secrets: inherit
 ```
 
