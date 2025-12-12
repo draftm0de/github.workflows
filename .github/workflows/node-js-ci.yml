@@ -49,6 +49,17 @@ jobs:
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
 
+  teste:
+    name: Teste
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: debug
+        shell: bash
+        run: |
+          echo "is-pull-request:${{ needs.setup.outputs.is-pull-request }}"
+          echo "ci-open-pull-requests:${{ needs.setup.outputs.ci-open-pull-requests }}"
+
   tests:
     name: Tests
     needs: setup
