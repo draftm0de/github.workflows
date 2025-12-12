@@ -1,43 +1,6 @@
-name: Node JS CI
-
-# Primary guardrail workflow that ensures every consuming repo keeps formatting,
-# static analysis, tests, and semantic versioning in sync before merging.
+name: Node.js CI
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-  workflow_dispatch:
-    inputs:
-      node-version:
-        description: Optional Node.js version.
-        required: false
-        default: '22'
-      enable-cache:
-        description: Toggle npm caching via actions/setup-node (true/false)
-        required: false
-        default: 'true'
-      lint-script:
-        description: npm script to lint the repo (set blank to skip).
-        required: false
-        default: 'lint'
-      prettier-script:
-        description: npm script that runs Prettier in check mode (set blank to skip).
-        required: false
-        default: 'format:check'
-      badges-script:
-        description: npm script that refreshes README/coverage badges (set blank to skip).
-        required: false
-        default: 'badges'
-      test-script:
-        description: npm script that runs the test suite (set blank to skip).
-        required: false
-        default: 'test'
   workflow_call:
     inputs:
       node-version:
@@ -45,6 +8,11 @@ on:
         required: false
         type: string
         default: '22'
+      node-version-env:
+        description: Optional env file exporting NODE_VERSION; file is sourced when provided
+        required: false
+        type: string
+        default: ''
       enable-cache:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
@@ -70,59 +38,100 @@ on:
         required: false
         type: string
         default: 'test'
+      docker-image:
+        description: docker image name
+        required: false
+        type: string
+        default: ghcr.io/draftm0de/ootb-http-chameleon:${{ github.sha }}
 
 env:
-  NODE_VERSION: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['node-version'] != '' && github.event.inputs['node-version'] || '22' }}
-  ENABLE_CACHE: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['enable-cache'] != '' && github.event.inputs['enable-cache'] || 'true' }}
-  LINT_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['lint-script'] != '' && github.event.inputs['lint-script'] || 'lint' }}
-  PRETTIER_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['prettier-script'] != '' && github.event.inputs['prettier-script'] || 'format:check' }}
-  BADGES_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['badges-script'] != '' && github.event.inputs['badges-script'] || 'badges' }}
-  TEST_SCRIPT: ${{ (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch') && github.event.inputs['test-script'] != '' && github.event.inputs['test-script'] || 'test' }}
+  NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '22' }}
+  NODE_VERSION_ENV: ${{ inputs['node-version-env'] != '' && inputs['node-version-env'] || '' }}
+  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || 'true' }}
+  LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || 'lint' }}
+  PRETTIER_SCRIPT: ${{ inputs['prettier-script'] != '' && inputs['prettier-script'] || 'format:check' }}
+  BADGES_SCRIPT: ${{ inputs['badges-script'] != '' && inputs['badges-script'] || 'badges' }}
+  TEST_SCRIPT: ${{ inputs['test-script'] != '' && inputs['test-script'] || 'test' }}
+  DOCKER_IMAGE: ${{ inputs['docker-image'] != '' && inputs['docker-image'] || '' }}
 
 jobs:
-  verify-version-tag:
-    if: github.repository != 'draftm0de/github.workflows'
-    # This repo only hosts templates, so bail if someone triggers workflow here.
-    # Always validate semantic version/tag parity before doing any heavy work.
+  setup:
+    name: Get Repository states
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        # Need full history so tag validation can see prior releases.
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/git-state
+        id: state
         with:
-          fetch-depth: 0
-
-      - name: Verify auto-tagging
-        # Run the shared action that parses package.json and predicts the next tag.
-        id: version_file
-        uses: draftm0de/github.workflows/.github/actions/node-js-auto-tagging@main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Capture workflow variables
+        id: vars
+        run: |
+          {
+            echo "docker-image=${{ env.DOCKER_IMAGE }}"
+          } >> "$GITHUB_OUTPUT"
+    outputs:
+      ci-open-pull-requests: ${{ steps.state.outputs.ci-open-pull-requests }}
+      docker-image: ${{ steps.vars.outputs.docker-image }}
 
   tests:
-    if: github.repository != 'draftm0de/github.workflows' && github.repository != 'draftm0de/flutter.clone'
-    # Skip both this catalog repo and the clone mirror that shouldn't run tests.
-    needs: verify-version-tag
+    name: Tests
+    needs: setup
+    if: github.event_name == 'pull_request' || needs.setup.outputs.ci-open-pull-requests == 'false'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        # Fetch code again because each job operates in its own runner workspace.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run node js tests
+        uses: ./.github/actions/node-js-test
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          node-version-env: ${{ env.NODE_VERSION_ENV }}
+          enable-cache: ${{ env.ENABLE_CACHE }}
+          lint-script: '' # ${{ env.LINT_SCRIPT }}
+          prettier-script: '' # ${{ env.PRETTIER_SCRIPT }}
+          badges-script: ''
+          test-script: ${{ env.TEST_SCRIPT }}
+
+  build_on_pull:
+    name: Build (pull request)
+    if: github.event_name == 'pull_request' && needs.setup.outputs.docker-image != ''
+    runs-on: ubuntu-latest
+    needs: tests
+    env:
+      DOCKER_IMAGE: ${{ needs.setup.outputs.docker-image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build docker image
+        uses: ./.github/actions/docker-build
+        id: build
+        with:
+          image: ${{ env.DOCKER_IMAGE }}
+          context: '.'
+          build-args-file: '.build.args'
+          options: '--no-cache'
+          reproducible: 'true'
+
+      - name: Upload Docker image
+        id: upload
+        uses: ./.github/actions/artifact-from-image
+        with:
+          image: ${{ steps.build.outputs.image }}
+
+  tag_on_pull:
+    name: Tag calculation (pull request)
+    if: github.event_name == 'pull_request'
+    needs:
+      - tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Verify auto-tagging
-        # Run the shared action that parses package.json and predicts the next tag.
-        id: version_file
-        uses: draftm0de/github.workflows/.github/actions/node-js-auto-tagging@main
-
-      - name: Run Node Js tests
-        # Composite action orchestrates Node setup and quality gates.
-        uses: draftm0de/github.workflows/.github/actions/node-js-test@main
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          enable-cache: ${{ env.ENABLE_CACHE }}
-          lint-script: ${{ env.LINT_SCRIPT }}
-          prettier-script: ${{ env.PRETTIER_SCRIPT }}
-          badges-script: ''
-          test-script: ${{ env.TEST_SCRIPT }}
+      - name: Build package and tag info
+        uses: ./.github/actions/node-js-version-builder

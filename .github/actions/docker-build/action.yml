@@ -27,9 +27,9 @@ outputs:
   digest:
     description: Docker image digest produced by the build
     value: ${{ steps.build-image.outputs.digest }}
-  artifact:
-    description: Artifact handle referencing the saved Docker image (name/path)
-    value: ${{ steps.upload.outputs.artifact }}
+  image:
+    description: Built docker image reference
+    value: ${{ steps.arguments.outputs.tag }}
 
 runs:
   using: composite
@@ -49,6 +49,7 @@ runs:
           build_args_file="$context/$build_args_file_input"
           if [ -f "$build_args_file" ]; then
             echo "> build args from file: $build_args_file"
+            echo "build_args_file=$build_args_file" >> "$GITHUB_OUTPUT"
             build_args=$(awk -F"=" '{ printf " --build-arg %s=%s", $1, $2 }' "$build_args_file")
             build_options="$build_options$build_args"
           else
@@ -79,7 +80,7 @@ runs:
         echo "> tag: $tag"
 
         echo "::endgroup::"
-        echo "build_options=$build_options" >> "$GITHUB_OUTPUT"
+        echo "build_options=$build_options" >> "$GITHUB_OUTPUT"        
         echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
     - name: Set up Docker Buildx for reproducible images
@@ -108,9 +109,12 @@ runs:
 
         echo "::endgroup::"
         echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
-    - name: Upload Docker image
-      id: upload
-      uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
-      with:
-        image: ${{ steps.arguments.outputs.tag }}
+        
+        build_args_file="${{ steps.arguments.outputs.build_args_file }}"
+        context="${{ inputs.context }}"
+        {
+          echo "### docker-builder"
+          echo "- context: $context"
+          echo "- build_args_file: $build_args_file"
+          echo "- digest: $digest"
+        } >> "$GITHUB_STEP_SUMMARY"

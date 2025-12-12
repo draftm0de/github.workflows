@@ -5,8 +5,9 @@ This GitHub Action saves a specified Docker image as a `.tar` file and uploads i
 ## Features
 
 - Exports Docker images as `.tar` files.
-- Automatically generates artifact names based on the Docker image name and tag.
-- Uploads the saved image as an artifact for later use.
+- Automatically generates deterministic artifact names from the image name/tag.
+- Uploads the saved image as an artifact for later jobs.
+- Appends a short summary to the workflow run so consumers can quickly see the artifact that was produced.
 
 ## Inputs
 
@@ -22,9 +23,9 @@ This GitHub Action saves a specified Docker image as a `.tar` file and uploads i
 
 ## How It Works
 
-1. Extracts the image name and tag from the input and prepares an artifact name.
+1. Extracts the image name and tag from the input and prepares an artifact name/path pair.
 2. Saves the specified Docker image as a `.tar` file using `docker save`.
-3. Uploads the `.tar` file as an artifact using `actions/upload-artifact`.
+3. Uploads the `.tar` file as an artifact with `actions/upload-artifact` and writes a short summary section.
 
 Pair this action with [`artifact-to-image`](../artifact-to-image) or the `docker-push` composite to move the built image across workflow boundaries.
 
@@ -37,8 +38,10 @@ jobs:
   save-docker-image:
     runs-on: ubuntu-latest
     steps:
-      - name: Save and Upload Docker Image
-        uses: ./
+      - name: Save and upload Docker image
+        uses: ./.github/actions/artifact-from-image
         with:
           image: myrepo/myimage:1.0
+
+The resulting artifact name is exposed via the `artifact` output (in `name/path` format) and echoed inside the workflow summary, making it easy to pass to [`artifact-to-image`](../artifact-to-image) or other publishing steps.
 ```

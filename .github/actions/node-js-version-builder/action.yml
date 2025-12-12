@@ -1,0 +1,32 @@
+name: node-js-version-builder
+description: Checkout the repo, read package.json, and derive git tags via git-tag-builder.
+
+outputs:
+  version:
+    description: "Version read from package.json"
+    value: ${{ steps.pkg.outputs.version }}
+  last_tag:
+    description: "Latest git tag including prefix"
+    value: ${{ steps.tags.outputs.last_tag }}
+  last_tag_short:
+    description: "Latest git tag without prefix"
+    value: ${{ steps.tags.outputs.last_tag_short }}
+  next_tag:
+    description: "Next git tag including prefix"
+    value: ${{ steps.tags.outputs.next_tag }}
+  next_tag_short:
+    description: "Next git tag without prefix"
+    value: ${{ steps.tags.outputs.next_tag_short }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Read package version
+      id: pkg
+      uses: ./.github/actions/node-js-version-reader
+
+    - name: Build git tag info
+      id: tags
+      uses: ./.github/actions/git-tag-builder
+      with:
+        source-version: ${{ steps.pkg.outputs.version }}

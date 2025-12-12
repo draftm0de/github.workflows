@@ -27,7 +27,7 @@ runs:
     - name: Load Docker image from artifact
       id: load-image
       if: ${{ inputs.artifact != '' }}
-      uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+      uses: ./.github/actions/artifact-to-image@main
       with:
         artifact: ${{ inputs.artifact }}
 

@@ -1,0 +1,188 @@
+name: git-tag-builder
+description: Build the next semver git tag from the source version while preventing drift.
+
+inputs:
+  source-version:
+    description: "Version read from source (e.g. package.json)"
+    required: true
+
+outputs:
+  last_tag:
+    description: "Latest git tag including the detected prefix"
+    value: ${{ steps.build.outputs.last_tag }}
+  last_tag_short:
+    description: "Latest semver git tag without prefix"
+    value: ${{ steps.build.outputs.last_tag_short }}
+  next_tag:
+    description: "Next git tag including the detected prefix"
+    value: ${{ steps.build.outputs.next_tag }}
+  next_tag_short:
+    description: "Next semver tag without prefix"
+    value: ${{ steps.build.outputs.next_tag_short }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate source version
+      id: source
+      shell: bash
+      run: |
+        set -euo pipefail
+        SRC_VERSION="${{ inputs.source-version }}"
+
+        if [ -z "$SRC_VERSION" ]; then
+          echo "::error::source-version input is required"
+          exit 1
+        fi
+
+        if [[ "$SRC_VERSION" =~ ^([^0-9]*)([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          SRC_PREFIX="${BASH_REMATCH[1]}"
+          SRC_BASE="${BASH_REMATCH[2]}"
+        else
+          echo "::error::Version '$SRC_VERSION' must follow optional-prefix+x.y.z"
+          exit 1
+        fi
+
+        IFS=. read -r SRC_MAJOR SRC_MINOR SRC_PATCH <<< "$SRC_BASE"
+
+        echo "version=$SRC_BASE" >> "$GITHUB_OUTPUT"
+        echo "prefix=$SRC_PREFIX" >> "$GITHUB_OUTPUT"
+        echo "src_major=$SRC_MAJOR" >> "$GITHUB_OUTPUT"
+        echo "src_minor=$SRC_MINOR" >> "$GITHUB_OUTPUT"
+        echo "src_patch=$SRC_PATCH" >> "$GITHUB_OUTPUT"
+
+    - name: Discover latest git tag
+      id: git
+      shell: bash
+      run: |
+        set -euo pipefail
+        PREFIX='${{ steps.source.outputs.prefix }}'
+
+        git fetch --tags --force >/dev/null 2>&1 || true
+
+        RAW_TAGS=$(git tag --list | sed 's/^\s*//;s/\s*$//;' || true)
+        SEMVER_TAGS=""
+        if [ -n "$RAW_TAGS" ]; then
+          while IFS= read -r TAG; do
+            [ -z "$TAG" ] && continue
+            BASE=""
+            if echo "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              BASE="$TAG"
+            elif echo "$TAG" | grep -Eq '^[vV][0-9]+\.[0-9]+\.[0-9]+$'; then
+              BASE="${TAG:1}"
+            elif [ -n "$PREFIX" ] && [[ "$TAG" == "$PREFIX"* ]]; then
+              CAND="${TAG#$PREFIX}"
+              if echo "$CAND" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                BASE="$CAND"
+              fi
+            fi
+
+            if [ -n "$BASE" ]; then
+              SEMVER_TAGS+="$BASE\n"
+            fi
+          done <<< "$RAW_TAGS"
+        fi
+
+        LAST_TAG_BASE="0.0.0"
+        if [ -n "$SEMVER_TAGS" ]; then
+          LAST_TAG_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+        fi
+
+        IFS=. read -r GIT_MAJOR GIT_MINOR GIT_PATCH <<< "$LAST_TAG_BASE"
+        GIT_PREFIXED="$PREFIX$LAST_TAG_BASE"
+
+        echo "last_tag_base=$LAST_TAG_BASE" >> "$GITHUB_OUTPUT"
+        echo "git_prefixed=$GIT_PREFIXED" >> "$GITHUB_OUTPUT"
+        echo "git_major=$GIT_MAJOR" >> "$GITHUB_OUTPUT"
+        echo "git_minor=$GIT_MINOR" >> "$GITHUB_OUTPUT"
+        echo "git_patch=$GIT_PATCH" >> "$GITHUB_OUTPUT"
+
+    - name: Ensure git is not ahead of source
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SRC_VERSION='${{ steps.source.outputs.version }}'
+        SRC_MAJOR='${{ steps.source.outputs.src_major }}'
+        SRC_MINOR='${{ steps.source.outputs.src_minor }}'
+        SRC_PATCH='${{ steps.source.outputs.src_patch }}'
+        LAST_TAG='${{ steps.git.outputs.last_tag_base }}'
+        GIT_MAJOR='${{ steps.git.outputs.git_major }}'
+        GIT_MINOR='${{ steps.git.outputs.git_minor }}'
+        GIT_PATCH='${{ steps.git.outputs.git_patch }}'
+
+        if [ "$GIT_MAJOR" -gt "$SRC_MAJOR" ]; then
+          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (major drift)"
+          exit 1
+        fi
+
+        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -gt "$SRC_MINOR" ]; then
+          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (minor drift)"
+          exit 1
+        fi
+
+        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ] && [ "$GIT_PATCH" -gt "$SRC_PATCH" ]; then
+          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (patch drift)"
+          exit 1
+        fi
+
+        echo "::notice::Git history is aligned with source version $SRC_VERSION"
+
+    - name: Build next tag
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SRC_VERSION='${{ steps.source.outputs.version }}'
+        SRC_PREFIX='${{ steps.source.outputs.prefix }}'
+        SRC_MAJOR='${{ steps.source.outputs.src_major }}'
+        SRC_MINOR='${{ steps.source.outputs.src_minor }}'
+        SRC_PATCH='${{ steps.source.outputs.src_patch }}'
+        LAST_TAG_BASE='${{ steps.git.outputs.last_tag_base }}'
+        GIT_MAJOR='${{ steps.git.outputs.git_major }}'
+        GIT_MINOR='${{ steps.git.outputs.git_minor }}'
+        GIT_PATCH='${{ steps.git.outputs.git_patch }}'
+
+        NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$SRC_PATCH"
+        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ]; then
+          NEXT_PATCH=$((GIT_PATCH + 1))
+          NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
+        fi
+
+        PREF_NEXT="$SRC_PREFIX$NEXT_TAG"
+        if [ -n "$SRC_PREFIX" ] && git tag --list "$PREF_NEXT" | grep -qx "$PREF_NEXT"; then
+          echo "::error::Tag $PREF_NEXT already exists."
+          exit 1
+        fi
+
+        if git tag --list "v$NEXT_TAG" | grep -qx "v$NEXT_TAG"; then
+          echo "::error::Tag v$NEXT_TAG already exists."
+          exit 1
+        fi
+
+        if git tag --list "$NEXT_TAG" | grep -qx "$NEXT_TAG"; then
+          echo "::error::Tag $NEXT_TAG already exists."
+          exit 1
+        fi
+
+        if [ -z "$SRC_PREFIX" ]; then
+          LAST_WITH_PREFIX="$LAST_TAG_BASE"
+          NEXT_WITH_PREFIX="$NEXT_TAG"
+        else
+          LAST_WITH_PREFIX="$SRC_PREFIX$LAST_TAG_BASE"
+          NEXT_WITH_PREFIX="$PREF_NEXT"
+        fi
+
+        echo "::notice::Git last tag: $LAST_WITH_PREFIX"
+        echo "::notice::Next tag candidate: $NEXT_WITH_PREFIX"
+        echo "last_tag=$LAST_WITH_PREFIX" >> "$GITHUB_OUTPUT"
+        echo "last_tag_short=$LAST_TAG_BASE" >> "$GITHUB_OUTPUT"
+        echo "next_tag=$NEXT_WITH_PREFIX" >> "$GITHUB_OUTPUT"
+        echo "next_tag_short=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+        {
+          echo "### git-tag-builder"
+          echo "- Git last tag: $LAST_WITH_PREFIX"
+          echo "- Source version: ${SRC_PREFIX}${SRC_VERSION}"
+          echo "- Next tag candidate: $NEXT_WITH_PREFIX"
+        } >> "$GITHUB_STEP_SUMMARY"

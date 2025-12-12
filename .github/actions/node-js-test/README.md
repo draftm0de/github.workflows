@@ -4,6 +4,7 @@ Composite action that installs Node.js dependencies, runs linting/formatting/bad
 
 ## Inputs
 - `node-version` *(default `22`)* — Version passed to `actions/setup-node`.
+- `node-version-env` *(default `''`)* — Path to an env file that exposes `NODE_VERSION=<value>`. The file is sourced via `set -a; source <file>; set +a`, so only point it to trusted `.env` files. When present it overrides `node-version`.
 - `enable-cache` *(default `true`)* — When true, `actions/setup-node` caches npm dependencies via `package-lock.json`.
 - `lint-script` *(default `lint`)* — Name of the npm script that lints the project. Set to empty to skip.
 - `prettier-script` *(default `format:check`)* — npm script responsible for running Prettier in check mode. Leave empty to skip.
@@ -11,7 +12,7 @@ Composite action that installs Node.js dependencies, runs linting/formatting/bad
 - `test-script` *(default `test`)* — npm script that runs the test suite. Leave empty to skip (not recommended).
 
 ## Behavior
-1. Checks out the caller repo and installs the requested Node.js version (with npm cache warming).
+1. Checks out the caller repo and installs the requested Node.js version (with npm cache warming). If `node-version-env` is provided it sources the file to read `NODE_VERSION`, mimicking local workflows that centralize the version in `.env`/`.nvmrc`.
 2. Runs `npm ci` when `package-lock.json` exists, otherwise uses `npm install`.
 3. Executes the configured lint, Prettier, badge, and test scripts—failing with actionable errors when scripts are missing.
 4. Records checklist entries in the GitHub step summary so consuming workflows get clear status indicators.

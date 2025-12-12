@@ -1,85 +1,55 @@
-# Node JS CI Workflow
+# Node.js CI Workflow
 
-Protects DraftMode Node repositories by enforcing semantic version checks, linting, Prettier formatting, badge regeneration, and tests on every pull request/manual run.
+Reusable workflow (`node-js-ci.yml`) that orchestrates linting, formatting, testing, and optional Docker builds for Node.js projects. It exposes the same knobs as the composite actions underneath so downstream repos can opt in to caching, badge refreshes, or Docker artifacts. Because the workflow is `workflow_call`-only, you must create an event-driven workflow (see `example.yml`) in the consuming repo to trigger it on `push`/`pull_request`.
 
-## When It Runs
+## Triggers
+- `workflow_call`: reusable workflow that must be invoked from another workflow (see `example.yml`).
 
-- `push` events to `main` branch
-- `pull_request` events (opened, synchronized, reopened, ready for review)
-- Manual invocations via `workflow_dispatch`
-- Reusable via `workflow_call` so other repos can `uses:` it directly
-- Jobs auto-skip inside `draftm0de/github.workflows` (template repo) and `draftm0de/flutter.clone`
+## Inputs
+| Name               | Default        | Description                                                                                                          |
+|--------------------|----------------|----------------------------------------------------------------------------------------------------------------------|
+| `node-version`     | `22`           | Node.js version passed to `actions/setup-node`.                                                                      |
+| `node-version-env` | `''`           | Optional env file path that defines `NODE_VERSION`, overriding `node-version` (useful when sharing `.env`/`.nvmrc`). |
+| `enable-cache`     | `true`         | Whether to enable npm caching in `setup-node`.                                                                       |
+| `lint-script`      | `lint`         | npm script name for linting (`''` to skip).                                                                          |
+| `prettier-script`  | `format:check` | npm script that runs Prettier in check mode (`''` to skip).                                                          |
+| `badges-script`    | `badges`       | npm script that refreshes README/coverage badges (`''` to skip).                                                     |
+| `test-script`      | `test`         | npm script that runs the test suite (`''` to skip).                                                                  |
+| `docker-image`     | `''`           | When set, enables Docker build / artifact jobs for pull requests.                                                    |
 
-## Job Overview
-
-1. **verify-version-tag** — Checks out the repository with full history and executes `node-js-auto-tagging` action to compare the `package.json` version against existing tags.
-2. **tests** — Repeats the checkout in a fresh runner, then calls `node-js-test` composite action to:
-   - Setup Node.js with optional npm caching
-   - Verify `package-lock.json` exists (required for reproducible builds)
-   - Install dependencies using `npm ci`
-   - Run lint script (if configured)
-   - Run Prettier format check (if configured)
-   - Run badges refresh script (if configured)
-   - Run test suite (if configured)
-
-## How to Use
-
-Reference the workflow from your repository so you inherit updates automatically:
-
+## Secrets
+When invoked via `workflow_call`, inherit the caller’s secrets so the workflow can use `${{ secrets.GITHUB_TOKEN }}` for the `git-state` guard and any package-registry credentials you rely on. If secrets are not inherited the action defaults to `exists=false`, meaning tests will always run on pushes.
 ```yaml
-# .github/workflows/node-js-ci.yml inside your repo
-name: Node JS CI
+uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
+secrets: inherit
+```
+Ensure the caller grants `pull-requests: read` so the custom action can check for existing PRs.
+
+## Example Integration
+```yaml
+# .github/workflows/ci.yml in a consuming repository
+name: Reuse node-js-ci
 
 on:
   push:
-    branches: [main]
+    branches: ["main", "release/*"]
   pull_request:
+    branches: ["main"]
 
 jobs:
-  draftmode-node-ci:
+  node:
     uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
-    secrets: inherit
     with:
-      node-version: '22'
-      enable-cache: 'true'
+      node-version: '20'
       lint-script: 'lint'
-      prettier-script: 'format:check'
-      badges-script: ''         # Skip if not needed
-      test-script: 'test'
+      prettier-script: ''        # skip prettier step
+      test-script: 'test:ci'
+      docker-image: ghcr.io/my-org/my-app:${{ github.sha }}
+    secrets: inherit
 ```
 
-Override any `with` inputs to match the npm scripts your project exposes. Leave a script blank (`''`) to skip that gate entirely.
+In this setup the reusable workflow automatically skips the push tests whenever a branch already has an open pull request (so the PR workflow remains the single source of truth), but still executes the PR and optional Docker jobs whenever the caller supplies `docker-image`. Callers that keep the canonical Node version inside a dotenv-style file can pass `node-version-env: '.env.build'` to avoid duplicating version declarations (the composite action sources the file with `set -a; source <file>; set +a`, so only reference trusted env files).
 
-## Inputs
+## Pull Request Guard
 
-- `node-version` _(default `22`)_ — Node.js version forwarded to `actions/setup-node`.
-- `enable-cache` _(default `true`)_ — Enable npm dependency caching (requires package-lock.json). Set to `false` to disable.
-- `lint-script` _(default `lint`)_ — npm script name used for linting. Set to `''` (empty) to skip.
-- `prettier-script` _(default `format:check`)_ — npm script for Prettier check mode. Set to `''` to skip.
-- `badges-script` _(default `badges`)_ — npm script that refreshes README/coverage badges. Set to `''` to skip.
-- `test-script` _(default `test`)_ — npm script that executes the main test suite. Set to `''` to skip.
-
-## Prerequisites
-
-**Required files:**
-- `package.json` - Node.js project manifest
-- `package-lock.json` - Dependency lockfile (must be committed)
-
-If `package-lock.json` is missing, the CI will fail. Generate it with:
-```bash
-npm install
-git add package-lock.json
-git commit -m "Add package-lock.json"
-```
-
-## Local Parity
-
-```bash
-npm ci              # Requires package-lock.json
-npm run lint
-npm run format:check
-npm run badges      # Optional, skip if not configured
-npm test
-```
-
-Use [`act`](https://github.com/nektos/act) with `node-js-ci.yml` to dry-run the workflow. Bump `package.json` with `npm version --no-git-tag-version 0.0.1`, add throwaway tags (`git tag v0.0.1`) so the tag gate has realistic data, and clean them up afterwards.
+The workflow delegates branch-deduplication to `.github/actions/git-state`, which reads `${{ secrets.GITHUB_TOKEN }}` to query the pull request API via the GitHub CLI (`gh`). Hosted runners ship with `gh` preinstalled. Self-hosted runners must provide the CLI and set `GITHUB_TOKEN`/`GH_TOKEN` environment variables so the action can authenticate. The action exposes outputs `exists`, `count`, and `ci-open-pull-requests` for backwards compatibility.

@@ -9,7 +9,11 @@ inputs:
   node-version:
     description: 'Node.js version to install via actions/setup-node'
     required: false
-    default: '22'
+    default: ''
+  node-version-env:
+    description: 'Path to an env file that exports NODE_VERSION (file is sourced with set -a)'
+    required: false
+    default: ''
   enable-cache:
     description: 'Enable npm dependency caching (requires package-lock.json)'
     required: false
@@ -34,10 +38,49 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Set Node Version
+      shell: bash
+      id: node-version
+      run: |
+        set -euo pipefail
+
+        ENV_FILE="${{ inputs.node-version-env }}"
+        NODE_VERSION="${{ inputs.node-version }}"
+
+        if [ -n "$ENV_FILE" ]; then
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "::error::node-version-env ($ENV_FILE) is set but file not found."
+            exit 1
+          fi
+
+          set -a
+          # shellcheck disable=SC1090
+          source "$ENV_FILE"
+          set +a
+
+          if [ -z "${NODE_VERSION:-}" ]; then
+            echo "::error::node-version-env ($ENV_FILE) does not set NODE_VERSION=..."
+            exit 1
+          fi
+
+          echo "::notice::NODE_VERSION sourced from $ENV_FILE"
+        else
+          if [ -z "${NODE_VERSION:-}" ]; then
+            echo "::error::node-version not provided as inputs.node-version"
+            exit 1
+          fi
+          echo "::notice::NODE_VERSION used from inputs.node-version"
+        fi
+
+        echo "::notice::use node-version: $NODE_VERSION"
+        {
+          echo "version=$NODE_VERSION"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ inputs.node-version }}
+        node-version: ${{ steps.node-version.outputs.version }}
         cache: ${{ inputs.enable-cache == 'true' && 'npm' || '' }}
         cache-dependency-path: ${{ inputs.enable-cache == 'true' && '**/package-lock.json' || '' }}
       # Installs the requested Node version and optionally caches npm dependencies.
