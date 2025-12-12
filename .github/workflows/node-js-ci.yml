@@ -39,11 +39,11 @@ on:
 env:
   NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '' }}
   NODE_VERSION_ENV: ${{ inputs['node-version-env'] != '' && inputs['node-version-env'] || '' }}
-  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || 'true' }}
-  LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || 'lint' }}
-  PRETTIER_SCRIPT: ${{ inputs['prettier-script'] != '' && inputs['prettier-script'] || 'format:check' }}
-  BADGES_SCRIPT: ${{ inputs['badges-script'] != '' && inputs['badges-script'] || 'badges' }}
-  TEST_SCRIPT: ${{ inputs['test-script'] != '' && inputs['test-script'] || 'test' }}
+  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || '' }}
+  LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || '' }}
+  PRETTIER_SCRIPT: ${{ inputs['prettier-script'] != '' && inputs['prettier-script'] || '' }}
+  BADGES_SCRIPT: ${{ inputs['badges-script'] != '' && inputs['badges-script'] || '' }}
+  TEST_SCRIPT: ${{ inputs['test-script'] != '' && inputs['test-script'] || '' }}
   DOCKER_IMAGE: ${{ inputs['docker-image'] != '' && inputs['docker-image'] || '' }}
 
 jobs:
