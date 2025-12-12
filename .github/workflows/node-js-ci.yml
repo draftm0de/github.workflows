@@ -45,20 +45,12 @@ jobs:
   setup:
     name: Get Repository states
     runs-on: ubuntu-latest
+    outputs:
+      is-pull-request: ${{ steps.state.outputs.is-pull-request }}
+      ci-open-pull-request: ${{ steps.state.outputs.ci-open-pull-request }}
     steps:
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
-
-  teste:
-    name: Teste
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: debug
-        shell: bash
-        run: |
-          echo "is-pull-request:${{ needs.setup.outputs.is-pull-request }}"
-          echo "ci-open-pull-requests:${{ needs.setup.outputs.ci-open-pull-requests }}"
 
   tests:
     name: Tests
