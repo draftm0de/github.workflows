@@ -15,6 +15,7 @@ on:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
         type: string
+        default: 'true'
       lint-script:
         description: npm script to lint the repo (set blank to skip).
         required: false
@@ -39,7 +40,7 @@ on:
 env:
   NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '' }}
   NODE_VERSION_ENV: ${{ inputs['node-version-env'] != '' && inputs['node-version-env'] || '' }}
-  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || '' }}
+  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || 'true' }}
   LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || '' }}
   PRETTIER_SCRIPT: ${{ inputs['prettier-script'] != '' && inputs['prettier-script'] || '' }}
   BADGES_SCRIPT: ${{ inputs['badges-script'] != '' && inputs['badges-script'] || '' }}

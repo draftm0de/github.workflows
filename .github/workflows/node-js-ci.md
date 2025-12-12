@@ -6,16 +6,18 @@ Reusable workflow (`node-js-ci.yml`) that orchestrates linting, formatting, test
 - `workflow_call`: reusable workflow that must be invoked from another workflow (see `example.yml`).
 
 ## Inputs
-| Name               | Default        | Description                                                                                                          |
-|--------------------|----------------|----------------------------------------------------------------------------------------------------------------------|
-| `node-version`     | `22`           | Node.js version passed to `actions/setup-node`.                                                                      |
-| `node-version-env` | `''`           | Optional env file path that defines `NODE_VERSION`, overriding `node-version` (useful when sharing `.env`/`.nvmrc`). |
-| `enable-cache`     | `true`         | Whether to enable npm caching in `setup-node`.                                                                       |
-| `lint-script`      | `lint`         | npm script name for linting (`''` to skip).                                                                          |
-| `prettier-script`  | `format:check` | npm script that runs Prettier in check mode (`''` to skip).                                                          |
-| `badges-script`    | `badges`       | npm script that refreshes README/coverage badges (`''` to skip).                                                     |
-| `test-script`      | `test`         | npm script that runs the test suite (`''` to skip).                                                                  |
-| `docker-image`     | `''`           | When set, enables Docker build / artifact jobs for pull requests.                                                    |
+| Name               | Default | Description                                                                                                          |
+|--------------------|---------|----------------------------------------------------------------------------------------------------------------------|
+| `node-version`     | `''`    | Optional Node.js version passed to `actions/setup-node`. Leave blank to rely on `node-version-env`.                  |
+| `node-version-env` | `''`    | Optional env file path that defines `NODE_VERSION`, overriding `node-version` (useful when sharing `.env`/`.nvmrc`). |
+| `enable-cache`     | `true`  | Whether to enable npm caching in `setup-node`.                                                                       |
+| `lint-script`      | `''`    | npm script name for linting (`''` to skip). Blank defers to the `node-js-test` action default (`lint`).              |
+| `prettier-script`  | `''`    | npm script that runs Prettier in check mode (`''` to skip). Blank defers to `format:check`.                          |
+| `badges-script`    | `''`    | npm script that refreshes README/coverage badges (`''` to skip). Blank defers to `badges`.                           |
+| `test-script`      | `''`    | npm script that runs the test suite (`''` to skip). Blank defers to `test`.                                          |
+| `docker-image`     | `''`    | When set, enables Docker build / artifact jobs for pull requests.                                                    |
+
+Leaving `node-version` **and** `node-version-env` blank causes the downstream `node-js-test` action to fail fast, so provide one of them. Other blank script inputs simply inherit the composite action defaults noted above.
 
 ## Secrets
 When invoked via `workflow_call`, inherit the caller’s secrets so the workflow can use `${{ secrets.GITHUB_TOKEN }}` for the `git-state` guard and any package-registry credentials you rely on. If secrets are not inherited the action defaults to `exists=false`, meaning tests will always run on pushes.
