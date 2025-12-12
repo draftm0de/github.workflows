@@ -41,23 +41,24 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   setup:
     name: Get Repository states
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-    outputs:
-      ci-open-pull-requests: ${{ steps.state.outputs.ci-open-pull-requests }}
 
   tests:
     name: Tests
     needs: setup
-    if: inputs.trigger_event == 'pull_request' || needs.setup.outputs.ci-open-pull-requests == 'false'
+    if: |
+      needs.setup.outputs.is-pull-request == 'true' || 
+      needs.setup.outputs.ci-open-pull-requests == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -76,7 +77,9 @@ jobs:
 
   build_on_pull:
     name: Build (pull request)
-    if: inputs.trigger_event == 'pull_request' && inputs.docker_image != ''
+    if: |
+      needs.setup.outputs.is-pull-request == 'true' && 
+      inputs.docker_image != ''
     runs-on: ubuntu-latest
     needs: tests
     steps:
@@ -101,7 +104,7 @@ jobs:
 
   tag_on_pull:
     name: Tag calculation (pull request)
-    if: inputs.trigger_event == 'pull_request'
+    if: needs.setup.outputs.is-pull-request == 'true'
     needs:
       - tests
     runs-on: ubuntu-latest

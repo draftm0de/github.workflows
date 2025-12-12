@@ -1,86 +1,60 @@
 name: Git PR Exists
 description: Detect whether the current branch already has an open pull request
 
-inputs:
-  github-token:
-    description: Token with `repo` scope used to call the GitHub pull request API.
-    required: false
-    default: ''
-
 outputs:
+  is-pull-request:
+    description: "true if GITHUB_REF looks like refs/pull/<nr>/..., else false"
+    value: ${{ steps.out.outputs.is-pull-request }}
   ci-open-pull-requests:
-    description: "Whether the current branch already has an open pull request"
-    value: ${{ steps.pull_request.outputs.exists }}
+    description: "true if there is an open PR for this branch (push runs), else false"
+    value: ${{ steps.out.outputs.ci-open-pull-request }}
+  branch:
+    description: "branch name if push; empty for PR merge refs"
+    value: ${{ steps.out.outputs.branch }}
 
 runs:
   using: "composite"
   steps:
     - name: Check if branch has open PR
-      id: pull_request
-      shell: bash
+      id: out
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
-        GH_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
       run: |
         set -euo pipefail
-
-        event_path="${GITHUB_EVENT_PATH:-}"
-        if [ -n "$event_path" ] && jq -e '.pull_request.number' "$event_path" >/dev/null 2>&1; then
-          echo "::notice::pull request payload detected; ci-open-pull-requests=true"
-          {
-            echo "exists=true"
-          } >> "$GITHUB_OUTPUT"
-          echo "- [ ] ci-open-pull-requests=true (detected from pull_request payload)" >> "$GITHUB_STEP_SUMMARY"
+        
+        REF="${GITHUB_REF}"
+        OWNER="${GITHUB_REPOSITORY%%/*}"
+        REPO="${GITHUB_REPOSITORY##*/}"        
+        
+        # Detect PR runs by ref format
+        if [[ "$REF" =~ ^refs/pull/([0-9]+)/ ]]; then
+          echo "is-pull-request=true" >> "$GITHUB_OUTPUT"
+          echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT" 
+          echo "branch=" >> "$GITHUB_OUTPUT"
+          echo "- [x] ci-open-pull-requests=true (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
           exit 0
-        fi
-
-        token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-        if [ -z "$token" ]; then
-          echo "::notice::PR existence verification skipped, no github-token provided"
-          {
-            echo "exists=false"
-          } >> "$GITHUB_OUTPUT"
-          echo "- [x] ci-open-pull-requests=false (token missing)" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
-        fi
-
-        branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
-        if [ -z "$branch" ]; then
-          echo "Unable to determine branch name" >&2
-          exit 1
-        fi
-
-        repo="${GITHUB_REPOSITORY}"
-        owner="${repo%%/*}"
-
-        prs=$(gh pr list \
-          --repo "$repo" \
-          --state open \
-          --head "${owner}:${branch}" \
-          --json number \
-          --jq 'length')
-
-        prs="${prs:-0}"
-
-        if [ "$prs" -gt 0 ]; then
-          exists=true
+        fi      
+        
+        # Push runs
+        BRANCH="${GITHUB_REF_NAME}"
+        echo "is-pull-request=false" >> "$GITHUB_OUTPUT"
+        echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+        
+        # Count open PRs for this branch (same-repo branches)
+        COUNT="$(gh api graphql -f query='
+          query($owner:String!, $name:String!, $head:String!) {
+            repository(owner:$owner, name:$name) {
+              pullRequests(states:OPEN, headRefName:$head) { totalCount }
+            }
+          }' \
+          -f owner="$OWNER" -f name="$REPO" -f head="$BRANCH" \
+          --jq '.data.repository.pullRequests.totalCount')"     
+        
+        if [[ "$COUNT" == "0" ]]; then
+          echo "ci-open-pull-requests=false"  >> "$GITHUB_OUTPUT"
+          echo "- [ ] ci-open-pull-requests=false (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
         else
-          exists=false
+          echo "ci-open-pull-requests=true" >> "$GITHUB_OUTPUT"
+          echo "- [X] ci-open-pull-requests=true (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
         fi
-
-        {
-          echo "exists=$exists"
-        } >> "$GITHUB_OUTPUT"
-
-        summary_prefix="- [x]"
-        summary_body="No open pull requests"
-        if [ "$exists" = true ]; then
-          summary_prefix="- [ ]"
-          if [ "$prs" -eq 1 ]; then
-            summary_body="1 open pull request"
-          else
-            summary_body="$prs open pull requests"
-          fi
-        fi
-
-        echo "$summary_prefix ci-open-pull-requests=$exists ($summary_body)" >> "$GITHUB_STEP_SUMMARY"
