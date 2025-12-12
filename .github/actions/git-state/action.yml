@@ -24,6 +24,16 @@ runs:
       run: |
         set -euo pipefail
 
+        event_path="${GITHUB_EVENT_PATH:-}"
+        if [ -n "$event_path" ] && jq -e '.pull_request.number' "$event_path" >/dev/null 2>&1; then
+          echo "::notice::pull request payload detected; ci-open-pull-requests=true"
+          {
+            echo "exists=true"
+          } >> "$GITHUB_OUTPUT"
+          echo "- [ ] ci-open-pull-requests=true (detected from pull_request payload)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
         token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
         if [ -z "$token" ]; then
           echo "::notice::PR existence verification skipped, no github-token provided"
