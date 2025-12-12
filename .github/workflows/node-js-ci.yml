@@ -7,45 +7,37 @@ on:
         description: Optional Node.js version.
         required: false
         type: string
-        default: '22'
       node-version-env:
         description: Optional env file exporting NODE_VERSION; file is sourced when provided
         required: false
         type: string
-        default: ''
       enable-cache:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
         type: string
-        default: 'true'
       lint-script:
         description: npm script to lint the repo (set blank to skip).
         required: false
         type: string
-        default: 'lint'
       prettier-script:
         description: npm script that runs Prettier in check mode (set blank to skip).
         required: false
         type: string
-        default: 'format:check'
       badges-script:
         description: npm script that refreshes README/coverage badges (set blank to skip).
         required: false
         type: string
-        default: 'badges'
       test-script:
         description: npm script that runs the test suite (set blank to skip).
         required: false
         type: string
-        default: 'test'
       docker-image:
         description: docker image name
         required: false
         type: string
-        default: ghcr.io/draftm0de/ootb-http-chameleon:${{ github.sha }}
 
 env:
-  NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '22' }}
+  NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '' }}
   NODE_VERSION_ENV: ${{ inputs['node-version-env'] != '' && inputs['node-version-env'] || '' }}
   ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || 'true' }}
   LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || 'lint' }}
@@ -89,9 +81,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           node-version-env: ${{ env.NODE_VERSION_ENV }}
           enable-cache: ${{ env.ENABLE_CACHE }}
-          lint-script: '' # ${{ env.LINT_SCRIPT }}
-          prettier-script: '' # ${{ env.PRETTIER_SCRIPT }}
-          badges-script: ''
+          lint-script: ${{ env.LINT_SCRIPT }}
+          prettier-script: ${{ env.PRETTIER_SCRIPT }}
+          badges-script: ${{ env.BADGES_SCRIPT }}
           test-script: ${{ env.TEST_SCRIPT }}
 
   build_on_pull:
