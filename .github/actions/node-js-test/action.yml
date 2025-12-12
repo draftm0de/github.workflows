@@ -69,13 +69,20 @@ runs:
             echo "::error::node-version not provided as inputs.node-version"
             exit 1
           fi
-          echo "::notice::NODE_VERSION used from inputs.node-version"
+        echo "::notice::NODE_VERSION used from inputs.node-version"
+        fi
+
+        source_label="inputs.node-version"
+        if [ -n "$ENV_FILE" ]; then
+          source_label="$ENV_FILE"
         fi
 
         echo "::notice::use node-version: $NODE_VERSION"
         {
           echo "version=$NODE_VERSION"
+          echo "source=$source_label"
         } >> "$GITHUB_OUTPUT"
+        echo "- [x] NODE_VERSION=$NODE_VERSION (from $source_label)" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
