@@ -9,17 +9,17 @@ inputs:
 
 outputs:
   exists:
-    description: 'true' if any open pull requests target the current branch
+    description: "'true' if any open pull requests target the current branch"
     value: ${{ steps.pull_request.outputs.exists }}
   count:
     description: Number of matching open pull requests
     value: ${{ steps.pull_request.outputs.count }}
   ci-open-pull-requests:
-    description: Backwards compatible alias for `exists`
+    description: "Backwards compatible alias for `exists`"
     value: ${{ steps.pull_request.outputs.exists }}
 
 runs:
-  using: composite
+  using: "composite"
   steps:
     - name: Check if branch has open PR
       id: pull_request

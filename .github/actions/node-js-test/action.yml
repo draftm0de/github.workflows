@@ -7,36 +7,36 @@ description: node-js-test
 
 inputs:
   node-version:
-    description: 'Node.js version to install via actions/setup-node'
+    description: "Node.js version to install via actions/setup-node"
     required: false
     default: ''
   node-version-env:
-    description: 'Path to an env file that exports NODE_VERSION (file is sourced with set -a)'
+    description: "Path to an env file that exports NODE_VERSION (file is sourced with set -a)"
     required: false
     default: ''
   enable-cache:
-    description: 'Enable npm dependency caching (requires package-lock.json)'
+    description: "Enable npm dependency caching (requires package-lock.json)"
     required: false
     default: 'true'
   lint-script:
-    description: 'npm script responsible for linting'
+    description: "npm script responsible for linting"
     required: false
     default: 'lint'
   prettier-script:
-    description: 'npm script that runs Prettier in check mode'
+    description: "npm script that runs Prettier in check mode"
     required: false
     default: 'format:check'
   badges-script:
-    description: 'Optional npm script that refreshes README/coverage badges'
+    description: "Optional npm script that refreshes README/coverage badges"
     required: false
     default: 'badges'
   test-script:
-    description: 'npm script that executes the test suite'
+    description: "npm script that executes the test suite"
     required: false
     default: 'test'
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Set Node Version
       shell: bash
@@ -78,7 +78,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ steps.node-version.outputs.version }}
         cache: ${{ inputs.enable-cache == 'true' && 'npm' || '' }}
