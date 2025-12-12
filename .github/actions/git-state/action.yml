@@ -32,7 +32,8 @@ runs:
           echo "is-pull-request=true" >> "$GITHUB_OUTPUT"
           echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT" 
           echo "branch=" >> "$GITHUB_OUTPUT"
-          echo "- [x] ci-open-pull-requests=true (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] is-pull-request">> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] ci-open-pull-requests (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi      
         
@@ -51,10 +52,11 @@ runs:
           -f owner="$OWNER" -f name="$REPO" -f head="$BRANCH" \
           --jq '.data.repository.pullRequests.totalCount')"     
         
+        echo "- [ ] is-pull-request">> "$GITHUB_STEP_SUMMARY"        
         if [[ "$COUNT" == "0" ]]; then
           echo "ci-open-pull-requests=false"  >> "$GITHUB_OUTPUT"
-          echo "- [ ] ci-open-pull-requests=false (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [ ] ci-open-pull-requests (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "ci-open-pull-requests=true" >> "$GITHUB_OUTPUT"
-          echo "- [X] ci-open-pull-requests=true (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
+          echo "- [X] ci-open-pull-requests (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
         fi
