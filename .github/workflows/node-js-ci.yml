@@ -3,49 +3,39 @@ name: Node.js CI
 on:
   workflow_call:
     inputs:
-      node-version:
+      node_version:
         description: Optional Node.js version.
         required: false
         type: string
-      node-version-env:
+      node_version_env:
         description: Optional env file exporting NODE_VERSION; file is sourced when provided
         required: false
         type: string
-      enable-cache:
+      enable_cache:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
         type: string
         default: 'true'
-      lint-script:
+      lint_script:
         description: npm script to lint the repo (set blank to skip).
         required: false
         type: string
-      prettier-script:
+      prettier_script:
         description: npm script that runs Prettier in check mode (set blank to skip).
         required: false
         type: string
-      badges-script:
+      badges_script:
         description: npm script that refreshes README/coverage badges (set blank to skip).
         required: false
         type: string
-      test-script:
+      test_script:
         description: npm script that runs the test suite (set blank to skip).
         required: false
         type: string
-      docker-image:
+      docker_image:
         description: docker image name
         required: false
         type: string
-
-env:
-  NODE_VERSION: ${{ inputs.node-version != '' && inputs.node-version || '' }}
-  NODE_VERSION_ENV: ${{ inputs['node-version-env'] != '' && inputs['node-version-env'] || '' }}
-  ENABLE_CACHE: ${{ inputs['enable-cache'] != '' && inputs['enable-cache'] || 'true' }}
-  LINT_SCRIPT: ${{ inputs['lint-script'] != '' && inputs['lint-script'] || '' }}
-  PRETTIER_SCRIPT: ${{ inputs['prettier-script'] != '' && inputs['prettier-script'] || '' }}
-  BADGES_SCRIPT: ${{ inputs['badges-script'] != '' && inputs['badges-script'] || '' }}
-  TEST_SCRIPT: ${{ inputs['test-script'] != '' && inputs['test-script'] || '' }}
-  DOCKER_IMAGE: ${{ inputs['docker-image'] != '' && inputs['docker-image'] || '' }}
 
 jobs:
   setup:
@@ -61,7 +51,7 @@ jobs:
         id: vars
         run: |
           {
-            echo "docker-image=${{ env.DOCKER_IMAGE }}"
+            echo "docker-image=${{ inputs.docker_image }}"
           } >> "$GITHUB_OUTPUT"
     outputs:
       ci-open-pull-requests: ${{ steps.state.outputs.ci-open-pull-requests }}
@@ -79,13 +69,13 @@ jobs:
       - name: Run node js tests
         uses: draftm0de/github.workflows/.github/actions/node-js-test@main
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          node-version-env: ${{ env.NODE_VERSION_ENV }}
-          enable-cache: ${{ env.ENABLE_CACHE }}
-          lint-script: ${{ env.LINT_SCRIPT }}
-          prettier-script: ${{ env.PRETTIER_SCRIPT }}
-          badges-script: ${{ env.BADGES_SCRIPT }}
-          test-script: ${{ env.TEST_SCRIPT }}
+          node-version: ${{ inputs.node_version }}
+          node-version-env: ${{ inputs.node_version_env }}
+          enable-cache: ${{ inputs.enable_cache }}
+          lint-script: ${{ inputs.lint_script }}
+          prettier-script: ${{ inputs.prettier_script }}
+          badges-script: ${{ inputs.badges_script }}
+          test-script: ${{ inputs.test_script }}
 
   build_on_pull:
     name: Build (pull request)
@@ -102,7 +92,7 @@ jobs:
         uses: draftm0de/github.workflows/.github/actions/docker-build@main
         id: build
         with:
-          image: ${{ env.DOCKER_IMAGE }}
+          image: ${{ needs.setup.outputs.docker-image }}
           context: '.'
           build-args-file: '.build.args'
           options: '--no-cache'

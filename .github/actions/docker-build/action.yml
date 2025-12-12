@@ -59,6 +59,11 @@ runs:
         fi
 
         image="${{ inputs.image }}"
+        if [ -z "$image" ]; then
+          echo "::error::image input is required when invoking docker-build"
+          exit 1
+        fi
+
         if [[ "$image" == *":"* ]]; then
           image_name="${image%%:*}"
           image_tag="${image#*:}"
