@@ -36,10 +36,6 @@ on:
         description: docker image name
         required: false
         type: string
-      trigger_event:
-        description: Optional event name propagated from the caller (e.g., github.event_name)
-        required: true
-        type: string
 
 permissions:
   contents: read
