@@ -151,11 +151,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        
-        PATCH=false
-        if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
-          PATCH=true    
-        fi
 
         SRC_VERSION='${{ steps.source.outputs.version }}'
         SRC_PREFIX='${{ steps.source.outputs.prefix }}'
@@ -170,10 +165,15 @@ runs:
 
         NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$SRC_PATCH"
         if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ]; then
-          if [[ "$PATCH" == "true" ]]; then 
+          if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
+            echo "::notice::Use tag patching: true (tagging-patch = true)"
             NEXT_PATCH=$((GIT_PATCH + 1))
             NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
-          fi           
+          else 
+            echo "::notice::Use tag patching: false (tagging-patch = false)"
+          fi
+        else
+          echo "::notice::Use tag patching: false"
         fi
 
         PREF_NEXT="$SRC_PREFIX$NEXT_TAG"
