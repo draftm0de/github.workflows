@@ -1,37 +1,44 @@
 # Node.js CI Workflow
 
-Reusable workflow (`node-js-ci.yml`) that orchestrates linting, formatting, testing, and optional Docker builds for Node.js projects. It exposes the same knobs as the composite actions underneath so downstream repos can opt in to caching, badge refreshes, or Docker artifacts. Because the workflow is `workflow_call`-only, you must create an event-driven workflow (see `example.yml`) in the consuming repo to trigger it on `push`/`pull_request`.
+Reusable workflow (`node-js-ci.yml`) that orchestrates DraftMode's Node.js CI pipeline. It installs dependencies, runs the repo-defined lint/format/badge/test scripts, and optionally builds/upload Docker images. Because it is `workflow_call`-only you must author an event-driven workflow (for example `.github/workflows/ci.yml`) in the consuming repo that invokes it on `push`/`pull_request`.
 
 ## Triggers
-- `workflow_call`: reusable workflow that must be invoked from another workflow (see `example.yml`).
+- `workflow_call`: reusable workflow that must be invoked from another workflow file.
 
 ## Inputs
-| Name               | Default | Description                                                                                                          |
-|--------------------|---------|----------------------------------------------------------------------------------------------------------------------|
-| `node_version`     | `''`    | Optional Node.js version passed to `actions/setup-node`. Leave blank to rely on `node_version_env`.                  |
-| `node_version_env` | `''`    | Optional env file path that defines `NODE_VERSION`, overriding `node_version` (useful when sharing `.env`/`.nvmrc`). |
-| `enable_cache`     | `true`  | Whether to enable npm caching in `setup-node`.                                                                       |
-| `lint_script`      | `''`    | npm script name for linting (`''` to skip). Blank defers to the `node-js-test` action default (`lint`).              |
-| `prettier_script`  | `''`    | npm script that runs Prettier in check mode (`''` to skip). Blank defers to `format:check`.                          |
-| `badges_script`    | `''`    | npm script that refreshes README/coverage badges (`''` to skip). Blank defers to `badges`.                           |
-| `test_script`      | `''`    | npm script that runs the test suite (`''` to skip). Blank defers to `test`.                                          |
-| `docker_image`     | `''`    | When set, enables Docker build / artifact jobs for pull requests.                                                    |
-| `trigger_event`    | `''`    | Optional event name propagated from the caller (set to `${{ github.event_name }}`) so the workflow knows when it runs on pull requests. |
+| Name              | Default | Description |
+|-------------------|---------|-------------|
+| `node_version`    | `''`    | Node.js version forwarded to `actions/setup-node`. Required when `node_version_env` is blank. |
+| `node_version_env`| `''`    | Optional path to an env file that exports `NODE_VERSION`. When set it overrides `node_version`. |
+| `enable_cache`    | `'true'`| Toggles npm caching inside `actions/setup-node`. Requires committed `package-lock.json`. |
+| `lint_script`     | `''`    | npm script name executed by `.github/actions/node-js-test`. Leave blank to skip linting. |
+| `prettier_script` | `''`    | npm script name for Prettier checks. Leave blank to skip. |
+| `badges_script`   | `''`    | npm script that refreshes README / coverage badges. Leave blank to skip. |
+| `test_script`     | `''`    | npm script that runs the test suite. Leave blank to skip (not recommended). |
+| `docker_image`    | `''`    | Image tag passed to the Docker build/upload jobs when a pull request is under test. Leave blank to skip those jobs. |
 
-Leave `trigger_event` blank only if you do not care about differentiating push vs. pull Request runs. When you pass `${{ github.event_name }}` downstream the workflow can always run tests for pull requests while selectively skipping duplicate push jobs. Leaving `node_version` **and** `node_version_env` blank causes the downstream `node-js-test` action to fail fast, so provide one of them. Other blank script inputs simply inherit the composite action defaults noted above.
+Provide either `node_version` or `node_version_env`. The composite action fails fast when both are empty so callers do not accidentally run with whatever Node version happens to be on the runner. Script inputs default to empty strings, which causes the composite action to skip each step after writing a checklist entry to the workflow summary—configure the scripts explicitly for every repo so CI matches your package scripts.
 
-## Secrets
-When invoked via `workflow_call`, inherit the caller’s secrets so the workflow can use `${{ secrets.GITHUB_TOKEN }}` for the `git-state` guard and any package-registry credentials you rely on. If secrets are not inherited the action defaults to `exists=false`, meaning tests will always run on pushes.
+## Secrets & Permissions
+Callers should inherit secrets so the workflow can read `${{ secrets.GITHUB_TOKEN }}` for the pull-request guard and any private registry credentials.
 ```yaml
-uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
-secrets: inherit
+jobs:
+  node:
+    uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
+    secrets: inherit
 ```
-Ensure the caller grants `pull-requests: read` so the custom action can check for existing PRs.
+The workflow itself requests `contents: read` and `pull-requests: read`. Hosted runners already satisfy the requirements for the guard action (`gh` + authenticated token). Self-hosted runners must provide `gh`, `jq`, and ensure `GH_TOKEN`/`GITHUB_TOKEN` are readable.
+
+## Job Overview
+- `setup`: Runs `.github/actions/git-state` to detect whether the ref is already a pull request or whether a push branch has an open PR. The job outputs `is-pull-request` and `ci-open-pull-requests` booleans that downstream jobs use to avoid duplicate test runs.
+- `tests`: Always runs on pull requests and only runs on pushes when there is no open PR for the same branch. It checks out the repo and executes `.github/actions/node-js-test`, which handles installing dependencies plus lint/format/badge/test scripts.
+- `build_on_pull`: Optional Docker build/upload flow for pull requests. It runs only when `docker_image` is non-empty so repositories can opt in job-by-job.
+- `tag_on_pull`: Builds version/tag metadata for PR validation using `.github/actions/node-js-version-builder`. It fetches the entire git history (`fetch-depth: 0`) so semantic versioning logic has the tags it needs.
 
 ## Example Integration
 ```yaml
 # .github/workflows/ci.yml in a consuming repository
-name: Reuse node-js-ci
+name: Node CI
 
 on:
   push:
@@ -45,15 +52,18 @@ jobs:
     with:
       node_version: '20'
       lint_script: 'lint'
-      prettier_script: ''        # skip prettier step
+      prettier_script: ''        # record a skip in the summary
       test_script: 'test:ci'
       docker_image: ghcr.io/my-org/my-app:${{ github.sha }}
-      trigger_event: ${{ github.event_name }}
     secrets: inherit
 ```
 
-In this setup the reusable workflow automatically skips the push tests whenever a branch already has an open pull request (so the PR workflow remains the single source of truth), but still executes the PR and optional Docker jobs whenever the caller supplies `docker_image`. Callers that keep the canonical Node version inside a dotenv-style file can pass `node_version_env: '.env.build'` to avoid duplicating version declarations (the composite action sources the file with `set -a; source <file>; set +a`, so only reference trusted env files).
+In this setup the reusable workflow automatically skips redundant push jobs when the same branch already has an open pull request. Pull requests keep the canonical test run plus optional Docker build/upload. Repositories that centralize their Node version in `.env.build` files can pass `node_version_env: '.env.build'` instead of hard-coding versions in multiple places.
 
 ## Pull Request Guard
-
-The workflow delegates branch-deduplication to `.github/actions/git-state`, which reads `${{ secrets.GITHUB_TOKEN }}` to query the pull request API via the GitHub CLI (`gh`). Hosted runners ship with `gh` preinstalled. Self-hosted runners must provide the CLI and set `GITHUB_TOKEN`/`GH_TOKEN` environment variables so the action can authenticate. The action exposes a single `ci-open-pull-requests` output (plus a step-summary line) that reports whether the branch already has an open pull request.
+`.github/actions/git-state` inspects `GITHUB_REF` to short-circuit during pull_request events and calls the GitHub GraphQL API (via `gh`) on push events to see whether the branch already has an open PR. Its outputs are consumed by the `tests` job condition:
+```yaml
+if: needs.setup.outputs.is-pull-request == 'true' ||
+    needs.setup.outputs.ci-open-pull-requests == 'false'
+```
+This ensures a branch's push workflow does not waste cycles running the same suite while the PR workflow is already in progress, but still runs on branches without open PRs (for example release branches or first-time pushes).

@@ -14,8 +14,8 @@ on:
       enable_cache:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
-        type: string
-        default: 'true'
+        type: boolean
+        default: true
       lint_script:
         description: npm script to lint the repo (set blank to skip).
         required: false
@@ -36,6 +36,15 @@ on:
         description: docker image name
         required: false
         type: string
+      tagging_mode:
+        description: base for auto tagging branch and image (branch, file)
+        required: false
+        type: string
+      tagging_patch:
+        description: patch provided tag base (true/false)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,18 +52,45 @@ permissions:
 
 jobs:
   setup:
-    name: Get Repository states
+    name: Workflow Setup
     runs-on: ubuntu-latest
     outputs:
       is-pull-request: ${{ steps.state.outputs.is-pull-request }}
       ci-open-pull-request: ${{ steps.state.outputs.ci-open-pull-request }}
+      branch-name: ${{ steps.state.outputs.branch-name }}
     steps:
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
 
+      - name: Validate tagging-mode Value
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          TAGGING_MODE="${{ inputs.tagging_mode }}"
+          
+          if [ -z "$TAGGING_MODE" ]; then
+            echo "::notice::Tagging skipped, no mode provided"
+            exit 0
+          fi 
+          
+          if [ "$TAGGING_MODE" == "branch" ]; then
+            echo "::notice::Tagging mode: branch"
+            exit 0
+          fi 
+          
+          if [ "$TAGGING_MODE" == "file" ]; then
+            echo "::notice::Tagging mode: file"
+            exit 0
+          fi
+          
+          echo "::error::Tagging mode: unsupported tagging mode $TAGGING_MODE (branch or file)"
+          exit 1
+
   tests:
     name: Tests
-    needs: setup
+    needs:
+      - setup
     if: |
       needs.setup.outputs.is-pull-request == 'true' || 
       needs.setup.outputs.ci-open-pull-requests == 'false'
@@ -80,7 +116,9 @@ jobs:
       needs.setup.outputs.is-pull-request == 'true' && 
       inputs.docker_image != ''
     runs-on: ubuntu-latest
-    needs: tests
+    needs:
+      - setup
+      - tests
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -103,8 +141,11 @@ jobs:
 
   tag_on_pull:
     name: Tag calculation (pull request)
-    if: needs.setup.outputs.is-pull-request == 'true'
+    if: |
+      needs.setup.outputs.is-pull-request == 'true' && 
+      inputs.tagging_mode != ''
     needs:
+      - setup
       - tests
     runs-on: ubuntu-latest
     steps:
@@ -113,5 +154,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build package and tag info
-        uses: draftm0de/github.workflows/.github/actions/node-js-version-builder@main
+      - name: Read package version
+        id: pkg
+        uses: draftm0de/github.workflows/.github/actions/node-js-version-reader@main
+
+      - name: Build git tag info
+        id: tags
+        uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+        with:
+          tagging-mode: ${{ inputs.tagging_mode }}
+          tagging-patch: ${{ inputs.tagging_patch }}
+          branch-name: ${{ needs.setup.outputs.branch-name }}
+          source-version: ${{ steps.pkg.outputs.version }}

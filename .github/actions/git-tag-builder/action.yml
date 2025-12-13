@@ -2,9 +2,20 @@ name: git-tag-builder
 description: Build the next semver git tag from the source version while preventing drift.
 
 inputs:
+  tagging-mode:
+    description: "Mode to calculate next tag"
+    required: true
+  branch-name:
+    description: "Current branch name"
+    required: true
+  tagging-patch:
+    description: "Patch next tag (true/false)"
+    required: false
+    default: 'false'
   source-version:
     description: "Version read from source (e.g. package.json)"
-    required: true
+    required: false
+    default: ''
 
 outputs:
   last_tag:
@@ -23,29 +34,35 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate source version
+    - name: Validate Target Version
       id: source
       shell: bash
       run: |
         set -euo pipefail
-        SRC_VERSION="${{ inputs.source-version }}"
-
-        if [ -z "$SRC_VERSION" ]; then
-          echo "::error::source-version input is required"
-          exit 1
-        fi
-
-        if [[ "$SRC_VERSION" =~ ^([^0-9]*)([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-          SRC_PREFIX="${BASH_REMATCH[1]}"
-          SRC_BASE="${BASH_REMATCH[2]}"
+        if [ "${{ inputs.tagging-mode }}" == "branch" ]; then
+          VERSION="${{ inputs.branch-name }}"
+          echo "::notice::version used from branch-name > $VERSION"
         else
-          echo "::error::Version '$SRC_VERSION' must follow optional-prefix+x.y.z"
+          VERSION="${{ inputs.source-version }}"
+          echo "::notice::version used from source-version > $VERSION"
+        fi 
+
+        if [ -z "$VERSION" ]; then
+          echo "::error::either branch-name or the source-version input is required."
           exit 1
         fi
 
-        IFS=. read -r SRC_MAJOR SRC_MINOR SRC_PATCH <<< "$SRC_BASE"
+        if [[ "$VERSION" =~ ^([^0-9]*)([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          VERSION_PREFIX="${BASH_REMATCH[1]}"
+          VERSION_BASE="${BASH_REMATCH[2]}"
+        else
+          echo "::error::Version '$VERSION' must follow optional-prefix+x.y.z"
+          exit 1
+        fi
 
-        echo "version=$SRC_BASE" >> "$GITHUB_OUTPUT"
+        IFS=. read -r SRC_MAJOR SRC_MINOR SRC_PATCH <<< "$VERSION_BASE"
+
+        echo "version=$VERSION_BASE" >> "$GITHUB_OUTPUT"
         echo "prefix=$SRC_PREFIX" >> "$GITHUB_OUTPUT"
         echo "src_major=$SRC_MAJOR" >> "$GITHUB_OUTPUT"
         echo "src_minor=$SRC_MINOR" >> "$GITHUB_OUTPUT"
@@ -106,6 +123,7 @@ runs:
         SRC_MAJOR='${{ steps.source.outputs.src_major }}'
         SRC_MINOR='${{ steps.source.outputs.src_minor }}'
         SRC_PATCH='${{ steps.source.outputs.src_patch }}'
+        
         LAST_TAG='${{ steps.git.outputs.last_tag_base }}'
         GIT_MAJOR='${{ steps.git.outputs.git_major }}'
         GIT_MINOR='${{ steps.git.outputs.git_minor }}'
@@ -128,17 +146,23 @@ runs:
 
         echo "::notice::Git history is aligned with source version $SRC_VERSION"
 
-    - name: Build next tag
+    - name: Build Next Tag
       id: build
       shell: bash
       run: |
         set -euo pipefail
+        
+        PATCH=false
+        if [ "${{ inputs.tagging-patch }}" == "true" ]; then
+          PATCH=true    
+        fi
 
         SRC_VERSION='${{ steps.source.outputs.version }}'
         SRC_PREFIX='${{ steps.source.outputs.prefix }}'
         SRC_MAJOR='${{ steps.source.outputs.src_major }}'
         SRC_MINOR='${{ steps.source.outputs.src_minor }}'
         SRC_PATCH='${{ steps.source.outputs.src_patch }}'
+        
         LAST_TAG_BASE='${{ steps.git.outputs.last_tag_base }}'
         GIT_MAJOR='${{ steps.git.outputs.git_major }}'
         GIT_MINOR='${{ steps.git.outputs.git_minor }}'
@@ -146,8 +170,10 @@ runs:
 
         NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$SRC_PATCH"
         if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ]; then
-          NEXT_PATCH=$((GIT_PATCH + 1))
-          NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
+          if [ "$PATCH" == "true" ]; then 
+            NEXT_PATCH=$((GIT_PATCH + 1))
+            NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
+          fi           
         fi
 
         PREF_NEXT="$SRC_PREFIX$NEXT_TAG"
@@ -176,10 +202,12 @@ runs:
 
         echo "::notice::Git last tag: $LAST_WITH_PREFIX"
         echo "::notice::Next tag candidate: $NEXT_WITH_PREFIX"
+        
         echo "last_tag=$LAST_WITH_PREFIX" >> "$GITHUB_OUTPUT"
         echo "last_tag_short=$LAST_TAG_BASE" >> "$GITHUB_OUTPUT"
         echo "next_tag=$NEXT_WITH_PREFIX" >> "$GITHUB_OUTPUT"
         echo "next_tag_short=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+        
         {
           echo "### git-tag-builder"
           echo "- Git last tag: $LAST_WITH_PREFIX"

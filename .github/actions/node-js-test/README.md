@@ -1,31 +1,31 @@
 # node-js-test Action
 
-Composite action that installs Node.js dependencies, runs linting/formatting/badge scripts, and finishes with the repository’s test suite so pull requests mirror DraftMode’s Node CI workflow.
+Composite action that enforces the Node.js quality gates DraftMode expects in CI. It installs dependencies with `npm ci`, runs repo-defined lint/format/badge/test scripts, and records each result in the GitHub step summary so downstream workflows remain easy to audit.
 
 ## Inputs
-| Name | Description | Required | Default |
-| --- | --- | --- | --- |
-| `node-version` | Version passed to `actions/setup-node`. | No | `22` |
-| `node-version-env` | Path to an env file that exports `NODE_VERSION=<value>`. The file is sourced via `set -a; source <file>; set +a`, so only point it to trusted `.env` files. When present it overrides `node-version`. | No | `''` |
-| `enable-cache` | Enables npm caching in `actions/setup-node` when `true`. | No | `true` |
-| `lint-script` | npm script that lints the project. Set to empty to skip. | No | `lint` |
-| `prettier-script` | npm script that runs Prettier in check mode. Leave empty to skip. | No | `format:check` |
-| `badges-script` | npm script that updates README/coverage badges. Leave empty to skip. | No | `badges` |
-| `test-script` | npm script that runs the test suite. Leave empty to skip (not recommended). | No | `test` |
+| Name | Default | Description |
+|------|---------|-------------|
+| `node_version` | `''` | Node.js version forwarded to `actions/setup-node`. Required when `node_version_env` is blank. |
+| `node_version_env` | `''` | Path to an env file that exports `NODE_VERSION`. The file is sourced with `set -a` / `source <file>` / `set +a`, so only reference trusted files. Overrides `node_version` when present. |
+| `enable_cache` | `'true'` | Toggles npm caching inside `actions/setup-node`. Requires checked-in `package-lock.json`. |
+| `lint_script` | `''` | npm script that runs linting. Leave blank to skip and record a checkbox entry in the summary. |
+| `prettier_script` | `''` | npm script that runs Prettier in check mode. Leave blank to skip. |
+| `badges_script` | `''` | npm script that refreshes README / coverage badges. Leave blank to skip. |
+| `test_script` | `''` | npm script that runs the test suite. Leave blank to skip (not recommended). |
 
 ## Behavior
-1. Checks out the caller repo and installs the requested Node.js version (with npm cache warming). If `node-version-env` is provided it sources the file to read `NODE_VERSION`, mimicking local workflows that centralize the version in `.env`/`.nvmrc`.
-2. Runs `npm ci` when `package-lock.json` exists, otherwise uses `npm install`.
-3. Executes the configured lint, Prettier, badge, and test scripts—failing with actionable errors when scripts are missing.
-4. Records checklist entries in the GitHub step summary so consuming workflows get clear status indicators.
+1. Validates the Node version source. When `node_version_env` is set the action sources the file and reads `NODE_VERSION`; otherwise it uses the explicit `node_version` input. Missing values cause the action to fail fast so runners never use an unintended system default.
+2. Installs Node via `actions/setup-node@v6`, optionally enabling npm caching based on `enable_cache`.
+3. Runs `npm ci` (failing when `package-lock.json` is missing) to ensure reproducible dependency installs.
+4. Executes the configured lint, Prettier, badge, and test scripts. Each step always runs so the GitHub job summary shows either a completed checkbox or a "skipped" entry. The action errors when a non-empty script name is not defined inside `package.json`.
 
 ## Local Parity
-Run the same commands locally before opening a PR:
+Before opening a pull request, mirror the workflow locally with the same script names you pass to the action:
 ```bash
-npm ci        # or npm install
-npm run lint
-npm run format:check
-npm run badges   # when applicable
-npm test
+npm ci
+npm run lint           # replace with your lint_script
+npm run format:check   # replace with your prettier_script
+npm run badges         # replace with your badges_script when applicable
+npm test               # replace with your test_script
 ```
-Use [`act`](https://github.com/nektos/act) to dry-run `.github/workflows/node-js-ci.yml` if you need to see the workflow plumbing end-to-end.
+Use [`act`](https://github.com/nektos/act) pointed at `.github/workflows/node-js-ci.yml` if you need to dry-run the full workflow that consumes this action.

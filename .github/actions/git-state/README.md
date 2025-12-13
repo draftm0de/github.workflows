@@ -1,29 +1,28 @@
 # Git PR Exists Action
 
-Composite action that checks if the current branch already has an open pull request in the same repository. When the action finds an open PR it surfaces `ci-open-pull-requests: 'true'` so workflows can skip redundant jobs such as running the full test suite twice. If the workflow payload already contains `pull_request` data (for example when the reusable workflow is invoked from a PR), the action short-circuits to `true` without hitting the API. If no GitHub token is provided it exits early with `ci-open-pull-requests: 'false'` and reports the decision in the workflow summary.
+Composite action that reports whether the current branch is already tied to an open pull request. It also emits a simple `is-pull-request` boolean so downstream workflows can detect when they are executing in the context of a PR vs. a push. The reusable Node.js workflow relies on this action to avoid running the full test suite twice for the same branch.
 
 ## Inputs
-| Name           | Description                                                                                                                                                                                  | Required | Default |
-|----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
-| `github-token` | Token with `repo` scope (usually `${{ secrets.GITHUB_TOKEN }}`) that allows calling the pull requests API. When omitted the action short-circuits and reports `ci-open-pull-requests=false`. | No       | `''`    |
+The action has no explicit inputs. It reads `GITHUB_REF` / `GITHUB_REPOSITORY` and uses `${{ github.token }}` automatically to authenticate GitHub CLI (`gh`) requests. Provide a PAT via the calling workflow only if `${{ secrets.GITHUB_TOKEN }}` is insufficient.
 
 ## Outputs
-| Name                    | Description                                                                                   |
-|-------------------------|-----------------------------------------------------------------------------------------------|
-| `ci-open-pull-requests` | `'true'` when at least one open pull request targets the current branch, otherwise `'false'`. |
+| Name                    | Description |
+|-------------------------|-------------|
+| `is-pull-request`       | `'true'` when the workflow already runs on a `pull_request` event (detected via `GITHUB_REF`). |
+| `ci-open-pull-requests` | `'true'` when an open PR exists for the current branch during push events, otherwise `'false'`. |
+| `branch`                | Branch name for push events, empty on PR refs. Useful for logging or downstream API calls. |
 
 ## Usage
 ```yaml
 steps:
-  - name: Check for existing pull requests
-    id: git_pr_exists
+  - name: Detect PR state
+    id: git_state
     uses: draftm0de/github.workflows/.github/actions/git-state@main
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   - name: Run tests
-    if: ${{ steps.git_pr_exists.outputs['ci-open-pull-requests'] == 'false' }}
+    if: ${{ steps.git_state.outputs.is-pull-request == 'true' ||
+            steps.git_state.outputs['ci-open-pull-requests'] == 'false' }}
     run: npm test
 ```
 
-Each run appends a checklist line (for example `- [x] ci-open-pull-requests=false (No open pull requests)` or `- [ ] ci-open-pull-requests=true (detected from pull_request payload)`) to the job summary so it is easy to confirm why later jobs were skipped. The action relies on the GitHub CLI (`gh`) that is preinstalled on the hosted runners whenever it needs to query open pull requests. Custom runners must also provide `gh`, `jq`, and ensure `GITHUB_TOKEN` is readable.
+Hosted GitHub runners already ship with `gh` and have a scoped `GITHUB_TOKEN`, so no extra configuration is required. Self-hosted runners must install `gh`, `jq`, and expose `GITHUB_TOKEN` / `GH_TOKEN`. Each run appends checklist entries (`- [x] is-pull-request`, `- [ ] ci-open-pull-requests (no PR for the same branch detected)`, etc.) to the job summary so it is easy to confirm why later jobs ran or were skipped.

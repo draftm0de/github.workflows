@@ -113,7 +113,6 @@ runs:
       # Enforces package-lock.json for reproducible installs.
 
     - name: Run lint script
-      if: inputs.lint_script != ''
       shell: bash
       run: |
         set -euo pipefail
@@ -135,7 +134,6 @@ runs:
       # Enforces lint parity via the configured npm script.
 
     - name: Run prettier script
-      if: inputs.prettier_script != ''
       shell: bash
       run: |
         set -euo pipefail
@@ -157,7 +155,6 @@ runs:
       # Verifies Prettier formatting stays consistent.
 
     - name: Refresh badges
-      if: inputs.badges_script != ''
       shell: bash
       run: |
         set -euo pipefail
@@ -179,7 +176,6 @@ runs:
       # Keeps README/coverage badges updated via a repo-defined script.
 
     - name: Run tests
-      if: inputs.test_script != ''
       shell: bash
       run: |
         set -euo pipefail
