@@ -11,10 +11,10 @@ Composite action that parses `pubspec.yaml`, validates existing git tags, and em
 | Name | Description |
 | --- | --- |
 | `version` | Exact semver parsed from the manifest. |
-| `version_with_build` | Semver plus any `+build` suffix. |
-| `build_metadata` | `+build` suffix (if provided). |
-| `new_version` | Computed patch bump without build metadata. |
-| `new_version_with_build` | Patch bump that preserves build metadata. |
+| `version-with-build` | Semver plus any `+build` suffix. |
+| `build-metadata` | `+build` suffix (if provided). |
+| `new-version` | Computed patch bump without build metadata. |
+| `new-version-with-build` | Patch bump that preserves build metadata. |
 
 ## How It Works
 1. Reads the supplied pubspec file, failing if the `version:` entry is missing or malformed.

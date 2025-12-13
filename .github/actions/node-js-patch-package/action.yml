@@ -2,13 +2,13 @@ name: node-js-patch-package
 description: Update package.json version with supplied semver.
 
 outputs:
-  updated_version:
+  updated-version:
     description: "Version written to package.json"
     value: ${{ steps.patch.outputs.updated_version }}
-  git_next_tag:
+  git-next-tag:
     description: "Next git tag including prefix"
     value: ${{ steps.tags.outputs.next_tag }}
-  git_next_tag_short:
+  git-next-tag-short:
     description: "Next git tag without prefix"
     value: ${{ steps.tags.outputs.next_tag_short }}
 

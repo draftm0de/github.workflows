@@ -36,10 +36,10 @@ jobs:
         uses: draftm0de/github.workflows/.github/actions/flutter-auto-tagging@main
 
       - name: Patch pubspec.yaml
-        if: steps.pubspec.outputs.new_version_with_build != ''
+        if: steps.pubspec.outputs.new-version-with-build != ''
         # Persist the computed version back into pubspec.yaml so repos stay aligned.
         run: |
-          TARGET_VERSION=${{ steps.pubspec.outputs.new_version_with_build }}
+          TARGET_VERSION=${{ steps.pubspec.outputs.new-version-with-build }}
 
           sed -i "s/^version: .*/version: ${TARGET_VERSION}/" pubspec.yaml
 
@@ -47,19 +47,19 @@ jobs:
           echo "- [x] pubspec.yaml version set to: $TARGET_VERSION" >> $GITHUB_STEP_SUMMARY
 
       - name: Commit pubspec.yaml changes
-        if: steps.pubspec.outputs.new_version_with_build != ''
+        if: steps.pubspec.outputs.new-version-with-build != ''
         # Only commit if the version field actually changed.
         run: |
-          TARGET_VERSION=${{ steps.pubspec.outputs.new_version_with_build }}
+          TARGET_VERSION=${{ steps.pubspec.outputs.new-version-with-build }}
           git add -A
           git commit -m "chore: auto-tagging version to ${TARGET_VERSION} [skip ci]"
           git push
 
       - name: Create and push tag
-        if: steps.pubspec.outputs.new_version != ''
+        if: steps.pubspec.outputs.new-version != ''
         # Tag the commit and push so downstream release flows can react.
         run: |
-          TARGET_VERSION=${{ steps.pubspec.outputs.new_version }}
+          TARGET_VERSION=${{ steps.pubspec.outputs.new-version }}
           TAG="v${TARGET_VERSION}"
 
           git tag "$TAG"

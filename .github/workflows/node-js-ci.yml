@@ -3,44 +3,44 @@ name: Node.js CI
 on:
   workflow_call:
     inputs:
-      node_version:
+      node-version:
         description: Optional Node.js version.
         required: false
         type: string
-      node_version_env:
+      node-version-env:
         description: Optional env file exporting NODE_VERSION; file is sourced when provided
         required: false
         type: string
-      enable_cache:
+      enable-cache:
         description: Toggle npm caching via actions/setup-node (true/false)
         required: false
         type: boolean
         default: true
-      lint_script:
+      lint-script:
         description: npm script to lint the repo (set blank to skip).
         required: false
         type: string
-      prettier_script:
+      prettier-script:
         description: npm script that runs Prettier in check mode (set blank to skip).
         required: false
         type: string
-      badges_script:
+      badges-script:
         description: npm script that refreshes README/coverage badges (set blank to skip).
         required: false
         type: string
-      test_script:
+      test-script:
         description: npm script that runs the test suite (set blank to skip).
         required: false
         type: string
-      docker_image:
+      docker-image:
         description: docker image name
         required: false
         type: string
-      tagging_mode:
+      tagging-mode:
         description: base for auto tagging branch and image (branch, file)
         required: false
         type: string
-      tagging_patch:
+      tagging-patch:
         description: patch provided tag base (true/false)
         required: false
         type: boolean
@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           
-          TAGGING_MODE="${{ inputs.tagging_mode }}"
+          TAGGING_MODE="${{ inputs.tagging-mode }}"
           
           if [ -z "$TAGGING_MODE" ]; then
             echo "::notice::Tagging skipped, no mode provided"
@@ -102,19 +102,19 @@ jobs:
       - name: Run node js tests
         uses: draftm0de/github.workflows/.github/actions/node-js-test@main
         with:
-          node_version: ${{ inputs.node_version }}
-          node_version_env: ${{ inputs.node_version_env }}
-          enable_cache: ${{ inputs.enable_cache }}
-          lint_script: ${{ inputs.lint_script }}
-          prettier_script: ${{ inputs.prettier_script }}
-          badges_script: ${{ inputs.badges_script }}
-          test_script: ${{ inputs.test_script }}
+          node-version: ${{ inputs.node-version }}
+          node-version-env: ${{ inputs.node-version-env }}
+          enable-cache: ${{ inputs.enable-cache }}
+          lint-script: ${{ inputs.lint-script }}
+          prettier-script: ${{ inputs.prettier-script }}
+          badges-script: ${{ inputs.badges-script }}
+          test-script: ${{ inputs.test-script }}
 
   build_on_pull:
     name: Build (pull request)
     if: |
       needs.setup.outputs.is-pull-request == 'true' && 
-      inputs.docker_image != ''
+      inputs.docker-image != ''
     runs-on: ubuntu-latest
     needs:
       - setup
@@ -127,7 +127,7 @@ jobs:
         uses: draftm0de/github.workflows/.github/actions/docker-build@main
         id: build
         with:
-          image: ${{ inputs.docker_image }}
+          image: ${{ inputs.docker-image }}
           context: '.'
           build-args-file: '.build.args'
           options: '--no-cache'
@@ -143,7 +143,7 @@ jobs:
     name: Tag calculation (pull request)
     if: |
       needs.setup.outputs.is-pull-request == 'true' && 
-      inputs.tagging_mode != ''
+      inputs.tagging-mode != ''
     needs:
       - setup
       - tests
@@ -162,7 +162,7 @@ jobs:
         id: tags
         uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
         with:
-          tagging-mode: ${{ inputs.tagging_mode }}
-          tagging-patch: ${{ inputs.tagging_patch }}
+          tagging-mode: ${{ inputs.tagging-mode }}
+          tagging-patch: ${{ inputs.tagging-patch }}
           branch-name: ${{ needs.setup.outputs.branch-name }}
           source-version: ${{ steps.pkg.outputs.version }}

@@ -11,9 +11,9 @@ Composite action that writes a provided semver into `package.json` so workflows 
 ## Outputs
 | Name | Description |
 | --- | --- |
-| `updated_version` | Version that was written to the manifest. |
-| `git_next_tag` | Prefixed tag (e.g., `v1.2.4`) returned from the internal `node-js-version-builder` step. |
-| `git_next_tag_short` | Bare semver tag (e.g., `1.2.4`) emitted alongside `git_next_tag`. |
+| `updated-version` | Version that was written to the manifest. |
+| `git-next-tag` | Prefixed tag (e.g., `v1.2.4`) returned from the internal `node-js-version-builder` step. |
+| `git-next-tag-short` | Bare semver tag (e.g., `1.2.4`) emitted alongside `git-next-tag`. |
 
 ## Behavior
 1. Validates the manifest path and new version format.

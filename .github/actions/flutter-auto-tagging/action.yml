@@ -14,16 +14,16 @@ outputs:
   version:
     description: "Version read from pubspec.yaml (x.y.z)"
     value: ${{ steps.read_version.outputs.version }}
-  version_with_build:
+  version-with-build:
     description: "Full version read from pubspec.yaml (x.y.z+build)"
     value: ${{ steps.read_version.outputs.version_with_build }}
-  build_metadata:
+  build-metadata:
     description: "Build metadata portion that followed the semver (if any)"
     value: ${{ steps.read_version.outputs.build_metadata }}
-  new_version:
+  new-version:
     description: "Next patch version (x.y.(z+1))"
     value: ${{ steps.patch_version.outputs.new_version }}
-  new_version_with_build:
+  new-version-with-build:
     description: "Next patch version, preserving build metadata if it existed"
     value: ${{ steps.patch_version.outputs.new_version_with_build }}
 

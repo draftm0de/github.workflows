@@ -18,16 +18,16 @@ inputs:
     default: ''
 
 outputs:
-  last_tag:
+  last-tag:
     description: "Latest git tag including the detected prefix"
     value: ${{ steps.build.outputs.last_tag }}
-  last_tag_short:
+  last-tag-short:
     description: "Latest semver git tag without prefix"
     value: ${{ steps.build.outputs.last_tag_short }}
-  next_tag:
+  next-tag:
     description: "Next git tag including the detected prefix"
     value: ${{ steps.build.outputs.next_tag }}
-  next_tag_short:
+  next-tag-short:
     description: "Next semver tag without prefix"
     value: ${{ steps.build.outputs.next_tag_short }}
 

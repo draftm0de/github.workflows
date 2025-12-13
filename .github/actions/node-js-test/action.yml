@@ -6,31 +6,31 @@ description: node-js-test
 # scripts so consuming repos can mirror the CI workflow locally.
 
 inputs:
-  node_version:
+  node-version:
     description: "Node.js version to install via actions/setup-node"
     required: false
     default: ''
-  node_version_env:
+  node-version-env:
     description: "Path to an env file that exports NODE_VERSION (file is sourced with set -a)"
     required: false
     default: ''
-  enable_cache:
+  enable-cache:
     description: "Enable npm dependency caching (requires package-lock.json)"
     required: false
     default: 'true'
-  lint_script:
+  lint-script:
     description: "npm script responsible for linting"
     required: false
     default: ''
-  test_script:
+  test-script:
     description: "npm script that executes the test suite"
     required: false
     default: ''
-  prettier_script:
+  prettier-script:
     description: "npm script that runs Prettier in check mode"
     required: false
     default: ''
-  badges_script:
+  badges-script:
     description: "Optional npm script that refreshes README/coverage badges"
     required: false
     default: ''
@@ -44,8 +44,8 @@ runs:
       run: |
         set -euo pipefail
 
-        ENV_FILE="${{ inputs.node_version_env }}"
-        INPUT_NODE_VERSION="${{ inputs.node_version }}"
+        ENV_FILE="${{ inputs.node-version-env }}"
+        INPUT_NODE_VERSION="${{ inputs.node-version }}"
         
         # Defaults
         source_label="inputs.node-version"
@@ -53,7 +53,7 @@ runs:
 
         if [ -n "$ENV_FILE" ]; then
           if [ ! -f "$ENV_FILE" ]; then
-            echo "::error::node_version_env ($ENV_FILE) is set but file not found."
+            echo "::error::node-version-env ($ENV_FILE) is set but file not found."
             exit 1
           fi
 
@@ -63,7 +63,7 @@ runs:
           set +a
 
           if [ -z "${NODE_VERSION:-}" ]; then
-            echo "::error::node_version_env ($ENV_FILE) does not set NODE_VERSION=..."
+            echo "::error::node-version-env ($ENV_FILE) does not set NODE_VERSION=..."
             exit 1
           fi
           source_label="$ENV_FILE"
@@ -116,7 +116,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.lint_script }}"
+        SCRIPT="${{ inputs.lint-script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Lint script input empty → skipping lint step."
@@ -137,7 +137,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.prettier_script }}"
+        SCRIPT="${{ inputs.prettier-script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Prettier script input empty → skipping formatting check."
@@ -158,7 +158,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.badges_script }}"
+        SCRIPT="${{ inputs.badges-script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Badge script input empty → skipping badge refresh."
@@ -179,7 +179,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SCRIPT="${{ inputs.test_script }}"
+        SCRIPT="${{ inputs.test-script }}"
 
         if [ -z "$SCRIPT" ]; then
           echo "::notice::Test script input empty → skipping tests."
