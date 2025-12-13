@@ -169,11 +169,11 @@ runs:
             echo "::notice::Use tag patching: true (tagging-patch = true)"
             NEXT_PATCH=$((GIT_PATCH + 1))
             NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
-          else 
-            echo "::notice::Use tag patching: false (tagging-patch = false)"
           fi
         else
-          echo "::notice::Use tag patching: false"
+          if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
+            echo "::notice::Use tag patching: false (new tag $SRC_MAJOR.$SRC_MINOR is ahead latest tag $GIT_MAJOR.$GIT_MINOR)"
+          fi 
         fi
 
         PREF_NEXT="$SRC_PREFIX$NEXT_TAG"
