@@ -63,7 +63,7 @@ runs:
         IFS=. read -r SRC_MAJOR SRC_MINOR SRC_PATCH <<< "$VERSION_BASE"
 
         echo "version=$VERSION_BASE" >> "$GITHUB_OUTPUT"
-        echo "prefix=$SRC_PREFIX" >> "$GITHUB_OUTPUT"
+        echo "prefix=$VERSION_PREFIX" >> "$GITHUB_OUTPUT"
         echo "src_major=$SRC_MAJOR" >> "$GITHUB_OUTPUT"
         echo "src_minor=$SRC_MINOR" >> "$GITHUB_OUTPUT"
         echo "src_patch=$SRC_PATCH" >> "$GITHUB_OUTPUT"
