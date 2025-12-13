@@ -8,7 +8,7 @@ outputs:
   ci-open-pull-requests:
     description: "true if there is an open PR for this branch (push runs), else false"
     value: ${{ steps.out.outputs.ci-open-pull-request }}
-  branch_name:
+  branch-name:
     description: "branch name"
     value: ${{ steps.out.outputs.branch-name }}
 
