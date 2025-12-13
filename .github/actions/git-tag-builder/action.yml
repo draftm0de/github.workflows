@@ -39,7 +39,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${{ inputs.tagging-mode }}" == "branch" ]; then
+        if [[ "${{ inputs.tagging-mode }}" == "branch" ]]; then
           VERSION="${{ inputs.branch-name }}"
           echo "::notice::version used from branch-name > $VERSION"
         else
@@ -47,7 +47,7 @@ runs:
           echo "::notice::version used from source-version > $VERSION"
         fi 
 
-        if [ -z "$VERSION" ]; then
+        if [[ -z "$VERSION" ]]; then
           echo "::error::either branch-name or the source-version input is required."
           exit 1
         fi
@@ -153,7 +153,7 @@ runs:
         set -euo pipefail
         
         PATCH=false
-        if [ "${{ inputs.tagging-patch }}" == "true" ]; then
+        if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
           PATCH=true    
         fi
 
@@ -170,7 +170,7 @@ runs:
 
         NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$SRC_PATCH"
         if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ]; then
-          if [ "$PATCH" == "true" ]; then 
+          if [[ "$PATCH" == "true" ]]; then 
             NEXT_PATCH=$((GIT_PATCH + 1))
             NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
           fi           
