@@ -1,16 +1,19 @@
-name: Git PR Exists
-description: Detect whether the current branch already has an open pull request
+name: Git State
+description: Detect Git state including PR context, open PRs for the current branch, and source/target branch names
 
 outputs:
   is-pull-request:
-    description: "true if GITHUB_REF looks like refs/pull/<nr>/..., else false"
+    description: "true if running on pull_request event (GITHUB_HEAD_REF is set), false for push events"
     value: ${{ steps.out.outputs.is-pull-request }}
-  ci-open-pull-requests:
-    description: "true if there is an open PR for this branch (push runs), else false"
+  ci-open-pull-request:
+    description: "true if an open PR exists for the current branch (always true for PR events, queried via API for push events)"
     value: ${{ steps.out.outputs.ci-open-pull-request }}
-  branch-name:
-    description: "branch name"
-    value: ${{ steps.out.outputs.branch-name }}
+  source-branch-name:
+    description: "Source branch name (GITHUB_HEAD_REF for PR events, GITHUB_REF_NAME for push events)"
+    value: ${{ steps.out.outputs.source-branch-name }}
+  target-branch-name:
+    description: "Target/base branch name (GITHUB_BASE_REF for PR events, empty for push events)"
+    value: ${{ steps.out.outputs.target-branch-name }}
 
 runs:
   using: "composite"
@@ -22,8 +25,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        
-        REF="${GITHUB_REF}"
+
         OWNER="${GITHUB_REPOSITORY%%/*}"
         REPO="${GITHUB_REPOSITORY##*/}"        
         
@@ -31,19 +33,23 @@ runs:
         if [[ -n "${GITHUB_HEAD_REF:-}" ]]; then
           echo "is-pull-request=true" >> "$GITHUB_OUTPUT"
           echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT" 
-          echo "branch-name=$GITHUB_HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "source-branch-name=$GITHUB_HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "target-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
           echo "- [x] is-pull-request">> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] ci-open-pull-requests (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] branch-name: $GITHUB_HEAD_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] ci-open-pull-request (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] source-branch-name: $GITHUB_HEAD_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] target-branch-name: $GITHUB_BASE_REF" >> "$GITHUB_STEP_SUMMARY"        
           exit 0
-        fi      
+        fi 
         
         # Push runs
         BRANCH="${GITHUB_REF_NAME}"
         echo "is-pull-request=false" >> "$GITHUB_OUTPUT"
-        echo "branch-name=$BRANCH" >> "$GITHUB_OUTPUT"
+        echo "source-branch-name=$BRANCH" >> "$GITHUB_OUTPUT"
+        echo "target-branch-name=" >> "$GITHUB_OUTPUT"
         
         # Count open PRs for this branch (same-repo branches)
+        set +e
         COUNT="$(gh api graphql -f query='
           query($owner:String!, $name:String!, $head:String!) {
             repository(owner:$owner, name:$name) {
@@ -51,14 +57,22 @@ runs:
             }
           }' \
           -f owner="$OWNER" -f name="$REPO" -f head="$BRANCH" \
-          --jq '.data.repository.pullRequests.totalCount')"     
-        
-        echo "- [ ] is-pull-request">> "$GITHUB_STEP_SUMMARY"        
-        if [[ "$COUNT" == "0" ]]; then
-          echo "ci-open-pull-requests=false"  >> "$GITHUB_OUTPUT"
-          echo "- [ ] ci-open-pull-requests (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
-        else
-          echo "ci-open-pull-requests=true" >> "$GITHUB_OUTPUT"
-          echo "- [X] ci-open-pull-requests (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
+          --jq '.data.repository.pullRequests.totalCount' 2>&1)"
+        API_STATUS=$?
+        set -e
+
+        if [[ $API_STATUS -ne 0 ]] || [[ -z "$COUNT" ]] || [[ ! "$COUNT" =~ ^[0-9]+$ ]]; then
+          echo "::warning::Failed to query GitHub API for open PRs (status: $API_STATUS). Assuming no open PRs exist."
+          COUNT="0"
         fi
-        echo "- [x] branch-name: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
+
+        echo "- [ ] is-pull-request">> "$GITHUB_STEP_SUMMARY"
+        if [[ "$COUNT" == "0" ]]; then
+          echo "ci-open-pull-request=false"  >> "$GITHUB_OUTPUT"
+          echo "- [ ] ci-open-pull-request (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT"
+          echo "- [X] ci-open-pull-request (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
+        fi
+        echo "- [x] source-branch-name: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
+        echo "- [x] target-branch-name: -" >> "$GITHUB_STEP_SUMMARY"

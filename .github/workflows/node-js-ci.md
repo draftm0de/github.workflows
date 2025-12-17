@@ -1,52 +1,223 @@
 # Node.js CI Workflow
 
-Reusable workflow (`node-js-ci.yml`) that orchestrates DraftMode's Node.js CI pipeline. It installs dependencies, runs the repo-defined lint/format/badge/test scripts, and optionally builds/upload Docker images. Because it is `workflow_call`-only you must author an event-driven workflow (for example `.github/workflows/ci.yml`) in the consuming repo that invokes it on `push`/`pull_request`.
+Reusable workflow that orchestrates a complete Node.js CI pipeline including testing, Docker builds, and semantic version validation. The workflow intelligently avoids duplicate test runs when both push and pull_request events trigger for the same branch, making it efficient for teams using PR-based development workflows.
 
 ## Triggers
-- `workflow_call`: reusable workflow that must be invoked from another workflow file.
+
+This is a `workflow_call` reusable workflow that must be invoked from event-driven workflows in consuming repositories.
+
+```yaml
+on:
+  workflow_call:
+```
+
+Consuming repositories should create a workflow file (e.g., `.github/workflows/ci.yml`) that triggers on `push` and/or `pull_request` events and calls this reusable workflow.
 
 ## Inputs
-| Name              | Default | Description |
-|-------------------|---------|-------------|
-| `node-version`    | `''`    | Node.js version forwarded to `actions/setup-node`. Required when `node-version-env` is blank. |
-| `node-version-env`| `''`    | Optional path to an env file that exports `NODE_VERSION`. When set it overrides `node-version`. |
-| `enable-cache`    | `true`  | Toggles npm caching inside `actions/setup-node`. Requires committed `package-lock.json`. |
-| `lint-script`     | `''`    | npm script name executed by `.github/actions/node-js-test`. Leave blank to skip linting. |
-| `prettier-script` | `''`    | npm script name for Prettier checks. Leave blank to skip. |
-| `badges-script`   | `''`    | npm script that refreshes README / coverage badges. Leave blank to skip. |
-| `test-script`     | `''`    | npm script that runs the test suite. Leave blank to skip (not recommended). |
-| `docker-image`    | `''`    | Image tag passed to the Docker build/upload jobs when a pull request is under test. Leave blank to skip those jobs. |
-| `tagging-mode`    | `''`    | Auto-tagging strategy for PRs. Use `branch` to derive the tag from the branch name or `file` to use the package version. Leave blank to disable tagging. |
-| `tagging-patch`   | `false` | When `true`, bumps the patch version beyond the latest git tag when major/minor match. Ignored when `tagging-mode` is blank. |
 
-Provide either `node-version` or `node-version-env`. The composite action fails fast when both are empty so callers do not accidentally run with whatever Node version happens to be on the runner. Script inputs default to empty strings, which causes the composite action to skip each step after writing a checklist entry to the workflow summary—configure the scripts explicitly for every repo so CI matches your package scripts. Tagging inputs are optional; leave `tagging-mode` blank when a repo does not need semver/tag validation.
+| Name                       | Type    | Required | Default | Description |
+|----------------------------|---------|----------|---------|-------------|
+| `node-version`             | string  | No       | `''`    | Node.js version passed to `actions/setup-node`. Required when `node-version-env` is not provided. |
+| `node-version-env`         | string  | No       | `''`    | Path to env file exporting `NODE_VERSION` (e.g., `.env.build`). Overrides `node-version` when provided. |
+| `enable-cache`             | boolean | No       | `true`  | Enable npm caching in `actions/setup-node`. Requires `package-lock.json` to be committed. |
+| `lint-script`              | string  | No       | `''`    | npm script name for linting (e.g., `lint`). Leave blank to skip. |
+| `prettier-script`          | string  | No       | `''`    | npm script name for Prettier checks (e.g., `format:check`). Leave blank to skip. |
+| `badges-script`            | string  | No       | `''`    | npm script to refresh README/coverage badges. Leave blank to skip. |
+| `test-script`              | string  | No       | `''`    | npm script to run test suite (e.g., `test`, `test:ci`). Leave blank to skip. |
+| `docker-image-name`        | string  | No       | `''`    | Docker image name for builds (e.g., `ghcr.io/org/app`). Leave blank to skip Docker jobs. |
+| `docker-image-tagging`     | boolean | No       | `false` | Enable Docker image tagging. |
+| `docker-image-tagging-level` | number | No      | -       | Docker image tagging levels. |
+| `tagging-mode`             | string  | No       | `''`    | Version source for tagging. Values: `nodejs` (from package.json), `branch` (from branch name). Leave blank to skip tagging jobs. |
+| `tagging-patch`            | boolean | No       | `false` | Enable patch mode for automatic patch version increments when major.minor match latest tag. |
 
-## Secrets & Permissions
-Callers should inherit secrets so the workflow can read `${{ secrets.GITHUB_TOKEN }}` for the pull-request guard and any private registry credentials.
+### Input Notes
+
+- **Node.js Version**: Provide either `node-version` OR `node-version-env`. The workflow will fail if both are empty.
+- **Scripts**: All script inputs default to empty strings. When empty, the test action skips that step and logs it in the workflow summary.
+- **Docker**: Docker jobs only run when `docker-image-name` is provided.
+- **Tagging**: Tagging jobs only run when `tagging-mode` is provided. Use `nodejs` to read version from package.json, or `branch` to extract version from branch name.
+
+## Permissions
+
+The workflow requires:
+```yaml
+permissions:
+  contents: read
+  pull-requests: read
+```
+
+Consuming repositories should use `secrets: inherit` to pass `GITHUB_TOKEN` and any registry credentials:
+
 ```yaml
 jobs:
   node:
     uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
     secrets: inherit
 ```
-The workflow itself requests `contents: read` and `pull-requests: read`. Hosted runners already satisfy the requirements for the guard action (`gh` + authenticated token). Self-hosted runners must provide `gh`, `jq`, and ensure `GH_TOKEN`/`GITHUB_TOKEN` are readable.
 
-## Job Overview
-- `setup`: Runs `.github/actions/git-state` to detect whether the ref is already a pull request, whether a push branch has an open PR, and to surface the normalized branch name via `branch-name`. It also validates that `tagging-mode` is blank, `branch`, or `file` before downstream jobs continue.
-- `tests`: Always runs on pull requests and only runs on pushes when there is no open PR for the same branch. It checks out the repo and executes `.github/actions/node-js-test`, which handles installing dependencies plus lint/format/badge/test scripts.
-- `build_on_pull`: Optional Docker build/upload flow for pull requests. It runs only when `docker-image` is non-empty so repositories can opt in job-by-job; the job depends on both `setup` and `tests` so Docker builds only happen after the quality gates pass.
-- `tag_on_pull`: Builds version/tag metadata for PR validation using `.github/actions/node-js-version-builder` and `.github/actions/git-tag-builder`. It fetches the entire git history (`fetch-depth: 0`) so semantic versioning logic has the tags it needs and pulls the branch name from `setup` when `tagging-mode == 'branch'`.
+## Jobs
 
-## Example Integration
+### 1. setup
+
+**Purpose**: Detects Git state and branch information.
+
+**Runs on**: `ubuntu-latest`
+
+**Steps**:
+1. Calls `git-state` action to detect:
+   - Whether running in PR context (`is-pull-request`)
+   - Whether an open PR exists for current branch (`ci-open-pull-request`)
+   - Source branch name (`source-branch-name`)
+   - Target branch name (`target-branch-name`)
+
+**Outputs**:
+- `is-pull-request`: `'true'` for PR events, `'false'` for push events
+- `ci-open-pull-request`: `'true'` when open PR exists for the branch
+- `source-branch-name`: Source/current branch name
+- `target-branch-name`: Target/base branch name (empty for push events)
+
+### 2. tests
+
+**Purpose**: Runs linting, formatting, and test suite.
+
+**Runs on**: `ubuntu-latest`
+
+**Depends on**: `setup`
+
+**Runs when**:
 ```yaml
-# .github/workflows/ci.yml in a consuming repository
-name: Node CI
+is-pull-request == 'true' OR ci-open-pull-request == 'false'
+```
+
+This means:
+- Always runs on PR events
+- Only runs on push events when there's NO open PR for that branch
+- Avoids duplicate test runs for the same branch
+
+**Steps**:
+1. Checkout repository
+2. Calls `node-js-test` action with all test/lint/format script inputs
+
+**Uses action**: `draftm0de/github.workflows/.github/actions/node-js-test@main`
+
+### 3. build_on_pull
+
+**Purpose**: Builds Docker image for pull requests.
+
+**Runs on**: `ubuntu-latest`
+
+**Depends on**: `setup`, `tests`
+
+**Runs when**:
+```yaml
+is-pull-request == 'true' AND docker-image-name != ''
+```
+
+This means:
+- Only runs for PR events
+- Only when Docker image name is provided
+- Only after tests pass
+
+**Steps**:
+1. Checkout repository
+2. Build Docker image using `docker-build` action (no cache, reproducible)
+3. Upload Docker image as artifact using `artifact-from-image` action
+
+**Uses actions**:
+- `draftm0de/github.workflows/.github/actions/docker-build@main`
+- `draftm0de/github.workflows/.github/actions/artifact-from-image@main`
+
+### 4. tag_on_pull
+
+**Purpose**: Validates version and calculates next tag candidate for PRs.
+
+**Runs on**: `ubuntu-latest`
+
+**Depends on**: `setup`, `tests`
+
+**Runs when**:
+```yaml
+is-pull-request == 'true' AND tagging-mode != ''
+```
+
+This means:
+- Only runs for PR events
+- Only when tagging mode is configured
+- Only after tests pass
+
+**Steps**:
+1. Checkout repository with full history (`fetch-depth: 0`)
+2. Read current version using `version-reader` action:
+   - Type: `nodejs` or `branch` (from `tagging-mode` input)
+   - Source branch: from `setup` job outputs
+3. Build next version using `tag-builder` action:
+   - Target branch: from `setup` job outputs
+   - Current version: from version-reader step
+   - Patch mode: from `tagging-patch` input
+
+**Uses actions**:
+- `draftm0de/github.workflows/.github/actions/version-reader@main`
+- `draftm0de/github.workflows/.github/actions/tag-builder@main`
+
+## Behavior
+
+### Pull Request Guard
+
+The workflow uses the `git-state` action to implement intelligent test execution:
+
+**For pull_request events:**
+- `is-pull-request` is `'true'`
+- Tests always run
+- Docker builds and version validation run (if configured)
+
+**For push events:**
+- `is-pull-request` is `'false'`
+- `git-state` queries GitHub API to check for open PRs on the branch
+- If `ci-open-pull-request == 'true'`: tests are skipped (PR workflow already running)
+- If `ci-open-pull-request == 'false'`: tests run (no PR exists, or direct push to protected branch)
+
+This prevents duplicate test runs when both events trigger for the same commit.
+
+### Version Reading Modes
+
+**`tagging-mode: nodejs`:**
+- Reads version from `package.json` in repository root
+- Validates version matches semantic version pattern
+- Fails if package.json missing or version invalid
+- Use for: Node.js projects with version in package.json
+
+**`tagging-mode: branch`:**
+- Extracts version from branch name (e.g., `v1.2.3`, `release/v1.2.3`, `v1.2`)
+- Defaults patch to `0` if only major.minor found
+- Fails if no version pattern found in branch name
+- Use for: Version-based branch naming conventions
+
+### Patch Mode
+
+When `tagging-patch: true`:
+
+1. Compares current version with latest tag from target branch
+2. If major.minor are the same: increments patch (e.g., `v1.2.3` → `v1.2.4`)
+3. If major or minor increased: uses version as-is with patch `0`
+4. Prevents version drift and ensures monotonic versioning
+
+When `tagging-patch: false`:
+- Uses exact version from source
+- Fails if version already exists or is older than latest tag
+
+## Example Usage
+
+### Basic Node.js CI
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
 
 on:
   push:
-    branches: ["main", "release/*"]
+    branches: [main, develop]
   pull_request:
-    branches: ["main"]
+    branches: [main, develop]
 
 jobs:
   node:
@@ -54,28 +225,110 @@ jobs:
     with:
       node-version: '20'
       lint-script: 'lint'
-      prettier-script: ''        # record a skip in the summary
       test-script: 'test:ci'
-      docker-image: ghcr.io/my-org/my-app:${{ github.sha }}
-      tagging-mode: 'file'
+    secrets: inherit
+```
+
+### With Docker and Tagging
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main, develop, release/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  node:
+    uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
+    with:
+      node-version: '20'
+      lint-script: 'lint'
+      prettier-script: 'format:check'
+      test-script: 'test:ci'
+      docker-image-name: ghcr.io/my-org/my-app
+      tagging-mode: 'nodejs'
       tagging-patch: true
     secrets: inherit
 ```
 
-In this setup the reusable workflow automatically skips redundant push jobs when the same branch already has an open pull request. Pull requests keep the canonical test run plus optional Docker build/upload. Repositories that centralize their Node version in `.env.build` files can pass `node-version-env: '.env.build'` instead of hard-coding versions in multiple places.
+### Version from Branch Name
 
-## Pull Request Guard
-`.github/actions/git-state` inspects `GITHUB_REF` to short-circuit during pull_request events and calls the GitHub GraphQL API (via `gh`) on push events to see whether the branch already has an open PR. Its outputs are consumed by the `tests` job condition:
 ```yaml
-if: needs.setup.outputs.is-pull-request == 'true' ||
-    needs.setup.outputs.ci-open-pull-requests == 'false'
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main, release/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  node:
+    uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
+    with:
+      node-version-env: '.env.build'
+      lint-script: 'lint'
+      test-script: 'test'
+      tagging-mode: 'branch'
+      tagging-patch: false
+    secrets: inherit
 ```
-This ensures a branch's push workflow does not waste cycles running the same suite while the PR workflow is already in progress, but still runs on branches without open PRs (for example release branches or first-time pushes).
 
-## Auto Tagging
-When `tagging-mode` is set, pull requests run the `tag_on_pull` job to compare the package version against the git history and calculate the next tag candidate:
+## Dependencies
 
-- `branch`: treat the branch name as the source version. This is useful for release branches named like `release/v1.2.3`, ensuring the branch naming convention directly drives the tag candidate.
-- `file`: read the version from `package.json` via `.github/actions/node-js-version-reader`.
+### Required on Runners
 
-Setting `tagging-patch: true` keeps the tag monotonic within the same major/minor by patch-bumping when the latest git tag already matches the source major/minor. Use this when multiple PRs can merge without bumping the version file but you still want unique tags. Leave `tagging-mode` blank to skip the job entirely (for example infrastructure repos that do not publish artifacts).
+**GitHub-hosted runners** (ubuntu-latest) include everything needed:
+- Node.js (version specified via inputs)
+- `gh` CLI
+- `git`
+- Docker
+
+**Self-hosted runners** must provide:
+- Node.js (or specify installation in consuming workflow)
+- `gh` CLI for git-state action
+- `git` with tag support
+- Docker (if using Docker jobs)
+- `GITHUB_TOKEN` or `GH_TOKEN` environment variable
+
+### Required Actions
+
+This workflow uses the following actions from the same repository:
+- `git-state` - Detects PR state and branch information
+- `node-js-test` - Runs Node.js tests and quality checks
+- `docker-build` - Builds Docker images
+- `artifact-from-image` - Uploads Docker images as artifacts
+- `version-reader` - Reads versions from package.json or branch names
+- `tag-builder` - Builds and validates semantic version tags
+
+## Workflow State
+
+**Current Status**: Partially implemented
+
+**Implemented jobs**:
+- ✅ `setup` - Git state detection
+- ✅ `tests` - Test execution with PR guard
+- ✅ `build_on_pull` - Docker builds for PRs
+- ✅ `tag_on_pull` - Version validation for PRs
+
+**Not yet implemented** (future work):
+- ⏳ `build_on_push` - Docker builds and pushes for merge events
+- ⏳ `tag_on_push` - Actual git tag creation on merge
+- ⏳ Push/publish jobs for npm, Docker registry, etc.
+
+The workflow currently handles the complete pull request validation pipeline. Push event jobs (building, tagging, publishing) will be added in future iterations.
+
+## Notes
+
+- The workflow enforces that either `node-version` or `node-version-env` is provided
+- All test scripts are optional - skip by leaving blank
+- Docker jobs are opt-in via `docker-image-name` input
+- Tagging jobs are opt-in via `tagging-mode` input
+- The PR guard prevents wasteful duplicate runs on the same branch
+- Full git history (`fetch-depth: 0`) is required for version comparison in tagging jobs
+- The workflow uses composite actions, making it easy to test and maintain individual components

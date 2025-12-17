@@ -1,0 +1,206 @@
+name: tag-builder
+description: Build version tags from current version and target branch while validating and handling patch mode.
+
+inputs:
+  target-branch:
+    description: "Target branch name (e.g. main)"
+    required: true
+  current-version:
+    description: "Current version with optional postfix (e.g. v1.0.1+1 or v1.0.1)"
+    required: true
+  patch:
+    description: "Enable patch mode to auto-increment patch version"
+    required: false
+    default: 'false'
+
+outputs:
+  version:
+    description: "Built version with postfix if present in input (e.g. v1.0.1+1)"
+    value: ${{ steps.build.outputs.version }}
+  version-short:
+    description: "Built version without postfix (e.g. v1.0.1)"
+    value: ${{ steps.build.outputs.version_short }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Parse current version
+      id: parse
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        CURRENT_VERSION="${{ inputs.current-version }}"
+
+        if [[ "$CURRENT_VERSION" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+          PREFIX="${BASH_REMATCH[1]}"
+          MAJOR="${BASH_REMATCH[2]}"
+          MINOR="${BASH_REMATCH[3]}"
+          PATCH="${BASH_REMATCH[4]}"
+          POSTFIX="${BASH_REMATCH[5]}"
+        else
+          echo "::error::Invalid version format: $CURRENT_VERSION"
+          echo "::error::Expected format: [v]X.Y.Z[+postfix]"
+          exit 1
+        fi
+
+        CURRENT_SHORT="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+
+        echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+        echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+        echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
+        echo "patch=$PATCH" >> "$GITHUB_OUTPUT"
+        echo "postfix=$POSTFIX" >> "$GITHUB_OUTPUT"
+        echo "current_short=$CURRENT_SHORT" >> "$GITHUB_OUTPUT"
+
+        echo "::notice::Current version: $CURRENT_VERSION"
+        echo "::notice::Current short: $CURRENT_SHORT"
+
+    - name: Get latest tag from target branch
+      id: latest
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        TARGET_BRANCH="${{ inputs.target-branch }}"
+        PREFIX="${{ steps.parse.outputs.prefix }}"
+
+        git fetch --tags --force >/dev/null 2>&1 || true
+
+        LATEST_TAG=""
+        if git rev-parse "origin/$TARGET_BRANCH" >/dev/null 2>&1; then
+          RAW_TAGS=$(git tag --merged "origin/$TARGET_BRANCH" 2>/dev/null || true)
+
+          SEMVER_TAGS=""
+          if [ -n "$RAW_TAGS" ]; then
+            while IFS= read -r TAG; do
+              [ -z "$TAG" ] && continue
+
+              if [[ "$TAG" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+                TAG_PREFIX="${BASH_REMATCH[1]}"
+                TAG_MAJOR="${BASH_REMATCH[2]}"
+                TAG_MINOR="${BASH_REMATCH[3]}"
+                TAG_PATCH="${BASH_REMATCH[4]}"
+
+                TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
+                SEMVER_TAGS+="$TAG_BASE\n"
+              fi
+            done <<< "$RAW_TAGS"
+          fi
+
+          if [ -n "$SEMVER_TAGS" ]; then
+            LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+            LATEST_TAG="${PREFIX}${LATEST_BASE}"
+          fi
+        fi
+
+        if [ -z "$LATEST_TAG" ]; then
+          LATEST_TAG="${PREFIX}0.0.0"
+          echo "::notice::No tags found on target branch, using $LATEST_TAG"
+        fi
+
+        if [[ "$LATEST_TAG" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+          LATEST_MAJOR="${BASH_REMATCH[2]}"
+          LATEST_MINOR="${BASH_REMATCH[3]}"
+          LATEST_PATCH="${BASH_REMATCH[4]}"
+          LATEST_SHORT="${PREFIX}${LATEST_MAJOR}.${LATEST_MINOR}.${LATEST_PATCH}"
+        else
+          echo "::error::Failed to parse latest tag: $LATEST_TAG"
+          exit 1
+        fi
+
+        echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+        echo "latest_short=$LATEST_SHORT" >> "$GITHUB_OUTPUT"
+        echo "latest_major=$LATEST_MAJOR" >> "$GITHUB_OUTPUT"
+        echo "latest_minor=$LATEST_MINOR" >> "$GITHUB_OUTPUT"
+        echo "latest_patch=$LATEST_PATCH" >> "$GITHUB_OUTPUT"
+
+        echo "::notice::Latest tag from target branch: $LATEST_TAG"
+        echo "::notice::Latest short: $LATEST_SHORT"
+
+    - name: Validate version is not older than latest
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        CURRENT_SHORT="${{ steps.parse.outputs.current_short }}"
+        CURRENT_MAJOR="${{ steps.parse.outputs.major }}"
+        CURRENT_MINOR="${{ steps.parse.outputs.minor }}"
+        CURRENT_PATCH="${{ steps.parse.outputs.patch }}"
+
+        LATEST_SHORT="${{ steps.latest.outputs.latest_short }}"
+        LATEST_MAJOR="${{ steps.latest.outputs.latest_major }}"
+        LATEST_MINOR="${{ steps.latest.outputs.latest_minor }}"
+        LATEST_PATCH="${{ steps.latest.outputs.latest_patch }}"
+
+        if [ "$LATEST_MAJOR" -gt "$CURRENT_MAJOR" ]; then
+          echo "::error::Latest version $LATEST_SHORT has higher major than current $CURRENT_SHORT"
+          exit 1
+        fi
+
+        if [ "$LATEST_MAJOR" -eq "$CURRENT_MAJOR" ] && [ "$LATEST_MINOR" -gt "$CURRENT_MINOR" ]; then
+          echo "::error::Latest version $LATEST_SHORT has higher minor than current $CURRENT_SHORT"
+          exit 1
+        fi
+
+        echo "::notice::Version validation passed"
+
+    - name: Build version
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        PREFIX="${{ steps.parse.outputs.prefix }}"
+        CURRENT_MAJOR="${{ steps.parse.outputs.major }}"
+        CURRENT_MINOR="${{ steps.parse.outputs.minor }}"
+        CURRENT_PATCH="${{ steps.parse.outputs.patch }}"
+        POSTFIX="${{ steps.parse.outputs.postfix }}"
+
+        LATEST_MAJOR="${{ steps.latest.outputs.latest_major }}"
+        LATEST_MINOR="${{ steps.latest.outputs.latest_minor }}"
+        LATEST_PATCH="${{ steps.latest.outputs.latest_patch }}"
+
+        PATCH_MODE="${{ inputs.patch }}"
+
+        if [[ "$PATCH_MODE" == "true" ]]; then
+          if [ "$CURRENT_MAJOR" -gt "$LATEST_MAJOR" ]; then
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+            echo "::notice::Patch mode: new major version, setting patch to 0"
+          elif [ "$CURRENT_MINOR" -gt "$LATEST_MINOR" ]; then
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+            echo "::notice::Patch mode: new minor version, setting patch to 0"
+          else
+            NEXT_PATCH=$((LATEST_PATCH + 1))
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
+            echo "::notice::Patch mode: incrementing patch from $LATEST_PATCH to $NEXT_PATCH"
+          fi
+        else
+          if [ "$LATEST_MAJOR" -eq "$CURRENT_MAJOR" ] && \
+             [ "$LATEST_MINOR" -eq "$CURRENT_MINOR" ] && \
+             [ "$LATEST_PATCH" -ge "$CURRENT_PATCH" ]; then
+            echo "::error::Latest patch $LATEST_PATCH is >= current patch $CURRENT_PATCH (use patch mode or increment version)"
+            exit 1
+          fi
+
+          VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+          echo "::notice::Non-patch mode: using current version as-is"
+        fi
+
+        VERSION="${VERSION_SHORT}${POSTFIX}"
+
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "version_short=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+
+        echo "::notice::Built version: $VERSION"
+        echo "::notice::Built version-short: $VERSION_SHORT"
+
+        {
+          echo "### tag-builder"
+          echo "- Target branch: ${{ inputs.target-branch }}"
+          echo "- Latest tag: ${{ steps.latest.outputs.latest_tag }}"
+          echo "- Current version: ${{ inputs.current-version }}"
+          echo "- Patch mode: $PATCH_MODE"
+          echo "- Built version: $VERSION"
+          echo "- Built version-short: $VERSION_SHORT"
+        } >> "$GITHUB_STEP_SUMMARY"
