@@ -36,15 +36,6 @@ on:
         description: docker image name
         required: false
         type: string
-      docker-image-tagging:
-        description: tag built docker image
-        required: false
-        type: boolean
-        default: false
-      docker-image-tagging-level:
-        description: tag built docker image levels
-        required: false
-        type: number
       tagging-mode:
         description: base for auto tagging branch and image (nodejs, branch)
         required: false
@@ -145,6 +136,7 @@ jobs:
         with:
           type: ${{ inputs.tagging-mode }}
           source-branch-name: ${{ needs.setup.outputs.source-branch-name }}
+          target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
 
       - name: Build next version
         id: tags
