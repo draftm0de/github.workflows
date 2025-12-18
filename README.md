@@ -8,8 +8,8 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 - Encourage contributions from anyone who spots an automation gap—open an issue or PR when a new workflow belongs here.
 
 ## Flutter Workflows
-- [`flutter-ci.yml`](.github/workflows/flutter-ci.md) — Pull-request guardrail that checks semantic version drift, formatting, analyzer warnings, localization artifacts, and `flutter test` results before merges.
-- [`flutter-release.yml`](.github/workflows/flutter-release.md) — Push-triggered release helper that bumps `pubspec.yaml`, commits the change, and creates a matching git tag so packages ship consistently.
+- [`flutter-ci.yml`](.github/workflows-kept/flutter-ci.md) — Pull-request guardrail that checks semantic version drift, formatting, analyzer warnings, localization artifacts, and `flutter test` results before merges.
+- [`flutter-release.yml`](.github/workflows-kept/flutter-release.md) — Push-triggered release helper that bumps `pubspec.yaml`, commits the change, and creates a matching git tag so packages ship consistently.
 
 ## Node.js Workflows
 - [`node-js-ci.yml`](.github/workflows/node-js-ci.md) — Pull-request/reusable workflow that validates `package.json` versions, runs lint/Prettier/badge scripts, and executes the Node test suite.

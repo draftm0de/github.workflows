@@ -1,4 +1,4 @@
-name: Node.js CI
+name: Node.js Release
 
 on:
   workflow_call:
@@ -22,10 +22,6 @@ on:
         type: string
       prettier-script:
         description: "npm script to run Prettier in check mode (leave blank to skip)"
-        required: false
-        type: string
-      badges-script:
-        description: "npm script to refresh README/coverage badges (leave blank to skip)"
         required: false
         type: string
       test-script:
@@ -69,33 +65,39 @@ on:
         required: false
         type: string
         default: "patch,latest"
+      docker-registry:
+        description: "Docker registry hostname (e.g., 'ghcr.io')"
+        required: false
+        type: string
+        default: "ghcr.io"
+      docker-registry-username:
+        description: "Docker registry username (inferred from image name if not provided)"
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  contents: write
+  packages: write
   pull-requests: read
 
 jobs:
-  # general and required job
+  # General and required job
   setup:
     name: Workflow Setup
     runs-on: ubuntu-latest
     outputs:
       is-pull-request: ${{ steps.state.outputs.is-pull-request }}
-      ci-open-pull-request: ${{ steps.state.outputs.ci-open-pull-request }}
       source-branch-name: ${{ steps.state.outputs.source-branch-name }}
       target-branch-name: ${{ steps.state.outputs.target-branch-name }}
     steps:
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
 
-  # node-js specific part about testing
+  # Node.js specific part about testing
   tests:
     name: Tests
     needs:
       - setup
-    if: |
-      needs.setup.outputs.is-pull-request == 'true' || 
-      needs.setup.outputs.ci-open-pull-request == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -109,49 +111,22 @@ jobs:
           enable-cache: ${{ inputs.enable-cache }}
           lint-script: ${{ inputs.lint-script }}
           prettier-script: ${{ inputs.prettier-script }}
-          badges-script: ${{ inputs.badges-script }}
           test-script: ${{ inputs.test-script }}
 
-  # general job to build a docker image (node-js independent)
-  build_on_pull:
-    name: Build (pull request)
-    if: |
-      needs.setup.outputs.is-pull-request == 'true' && 
-      inputs.docker-image-name != ''
-    runs-on: ubuntu-latest
-    needs:
-      - setup
-      - tests
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build docker image
-        uses: draftm0de/github.workflows/.github/actions/docker-build@main
-        id: build
-        with:
-          image: ${{ inputs.docker-image-name }}
-          context: ${{ inputs.docker-build-context }}
-          build-args-file: ${{ inputs.docker-build-args-file }}
-          options: ${{ inputs.docker-build-options }}
-          reproducible: ${{ inputs.docker-build-reproducible }}
-
-      - name: Upload Docker image
-        id: upload
-        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
-        with:
-          image: ${{ steps.build.outputs.image }}
-
-  # general job to calculate next tags and verify them (node-js independent)
-  tag_on_pull:
-    name: Tag calculation (pull request)
-    if: |
-      needs.setup.outputs.is-pull-request == 'true' &&
-      inputs.tag-source != ''
+  # General job to calculate and create version tags
+  version_and_tags:
+    name: Version and tags
+    if: inputs.tag-source != ''
     needs:
       - setup
       - tests
     runs-on: ubuntu-latest
+    outputs:
+      next-version: ${{ steps.version.outputs.next-version }}
+      next-version-short: ${{ steps.version.outputs.next-version-short }}
+      is-latest-version: ${{ steps.version.outputs.is-latest-version }}
+      docker-tags: ${{ steps.docker-tags.outputs.docker-tags }}
+      git-tags-created: ${{ steps.git-tags.outputs.tags-created }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -166,9 +141,74 @@ jobs:
           target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
 
       - name: Build next version
-        id: tags
+        id: version
         uses: draftm0de/github.workflows/.github/actions/tag-builder@main
         with:
           target-branch: ${{ needs.setup.outputs.target-branch-name }}
           current-version: ${{ steps.current-version.outputs.version }}
           patch: ${{ inputs.tag-increment-patch }}
+
+      - name: Build Docker tags
+        id: docker-tags
+        if: inputs.docker-image-name != ''
+        uses: draftm0de/github.workflows/.github/actions/docker-tag-builder@main
+        with:
+          version: ${{ steps.version.outputs.next-version-short }}
+          is-latest-version: ${{ steps.version.outputs.is-latest-version }}
+          tag-levels: ${{ inputs.docker-tag-levels }}
+
+      - name: Create git tags
+        id: git-tags
+        uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+        with:
+          version: ${{ steps.version.outputs.next-version-short }}
+          target-branch: ${{ needs.setup.outputs.target-branch-name }}
+
+      - name: Push git tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAGS_CREATED="${{ steps.git-tags.outputs.tags-created }}"
+
+          if [ -z "$TAGS_CREATED" ]; then
+            echo "::notice::No tags to push"
+            exit 0
+          fi
+
+          echo "::notice::Pushing tags: $TAGS_CREATED"
+          git push origin --tags
+
+          echo "::notice::Tags pushed successfully"
+
+  # General job to build and push Docker image
+  build_and_push:
+    name: Build and push Docker image
+    if: inputs.docker-image-name != '' && inputs.tag-source != ''
+    needs:
+      - setup
+      - tests
+      - version_and_tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        uses: draftm0de/github.workflows/.github/actions/docker-build@main
+        id: build
+        with:
+          image: ${{ inputs.docker-image-name }}
+          context: ${{ inputs.docker-build-context }}
+          build-args-file: ${{ inputs.docker-build-args-file }}
+          options: ${{ inputs.docker-build-options }}
+          reproducible: ${{ inputs.docker-build-reproducible }}
+
+      - name: Push Docker image
+        uses: draftm0de/github.workflows/.github/actions/docker-push@main
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ needs.version_and_tags.outputs.docker-tags }}
+          registry: ${{ inputs.docker-registry }}
+          username: ${{ inputs.docker-registry-username }}
+          password: ${{ secrets.GITHUB_TOKEN }}
