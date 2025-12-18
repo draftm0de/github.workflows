@@ -14,12 +14,15 @@ inputs:
     default: 'false'
 
 outputs:
-  version:
+  next-version:
     description: "Built version with postfix if present in input (e.g. v1.0.1+1)"
-    value: ${{ steps.build.outputs.version }}
-  version-short:
+    value: ${{ steps.build.outputs.next_version }}
+  next-version-short:
     description: "Built version without postfix (e.g. v1.0.1)"
-    value: ${{ steps.build.outputs.version_short }}
+    value: ${{ steps.build.outputs.next_version_short }}
+  is-latest-version:
+    description: "Whether the built version is the latest across all branches (true/false)"
+    value: ${{ steps.build.outputs.is_latest_version }}
 
 runs:
   using: "composite"
@@ -118,6 +121,55 @@ runs:
         echo "::notice::Latest tag from target branch: $LATEST_TAG"
         echo "::notice::Latest short: $LATEST_SHORT"
 
+    - name: Get global latest tag
+      id: global
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # Get all tags from repository (not filtered by branch)
+        ALL_TAGS=$(git tag --list 2>/dev/null || true)
+
+        GLOBAL_SEMVER_TAGS=""
+        if [ -n "$ALL_TAGS" ]; then
+          while IFS= read -r TAG; do
+            [ -z "$TAG" ] && continue
+
+            # Match semver pattern, strip any prefix for comparison
+            if [[ "$TAG" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+              TAG_MAJOR="${BASH_REMATCH[2]}"
+              TAG_MINOR="${BASH_REMATCH[3]}"
+              TAG_PATCH="${BASH_REMATCH[4]}"
+
+              TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
+              GLOBAL_SEMVER_TAGS+="$TAG_BASE\n"
+            fi
+          done <<< "$ALL_TAGS"
+        fi
+
+        GLOBAL_LATEST_BASE="0.0.0"
+        if [ -n "$GLOBAL_SEMVER_TAGS" ]; then
+          GLOBAL_LATEST_BASE=$(printf '%s\n' "$GLOBAL_SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+        fi
+
+        # Parse global latest
+        if [[ "$GLOBAL_LATEST_BASE" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          GLOBAL_MAJOR="${BASH_REMATCH[1]}"
+          GLOBAL_MINOR="${BASH_REMATCH[2]}"
+          GLOBAL_PATCH="${BASH_REMATCH[3]}"
+        else
+          GLOBAL_MAJOR="0"
+          GLOBAL_MINOR="0"
+          GLOBAL_PATCH="0"
+        fi
+
+        echo "global_latest_base=$GLOBAL_LATEST_BASE" >> "$GITHUB_OUTPUT"
+        echo "global_major=$GLOBAL_MAJOR" >> "$GITHUB_OUTPUT"
+        echo "global_minor=$GLOBAL_MINOR" >> "$GITHUB_OUTPUT"
+        echo "global_patch=$GLOBAL_PATCH" >> "$GITHUB_OUTPUT"
+
+        echo "::notice::Global latest tag: $GLOBAL_LATEST_BASE"
+
     - name: Validate version is not older than latest
       shell: bash
       run: |
@@ -189,18 +241,40 @@ runs:
 
         VERSION="${VERSION_SHORT}${POSTFIX}"
 
-        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        echo "version_short=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+        # Determine if this is the latest version globally
+        GLOBAL_MAJOR="${{ steps.global.outputs.global_major }}"
+        GLOBAL_MINOR="${{ steps.global.outputs.global_minor }}"
+        GLOBAL_PATCH="${{ steps.global.outputs.global_patch }}"
+
+        # Strip prefix from VERSION_SHORT for comparison
+        NEXT_BASE="${VERSION_SHORT#[vV]}"
+        IFS=. read -r NEXT_MAJOR NEXT_MINOR NEXT_PATCH <<< "$NEXT_BASE"
+
+        IS_LATEST="false"
+        if [ "$NEXT_MAJOR" -gt "$GLOBAL_MAJOR" ]; then
+          IS_LATEST="true"
+        elif [ "$NEXT_MAJOR" -eq "$GLOBAL_MAJOR" ] && [ "$NEXT_MINOR" -gt "$GLOBAL_MINOR" ]; then
+          IS_LATEST="true"
+        elif [ "$NEXT_MAJOR" -eq "$GLOBAL_MAJOR" ] && [ "$NEXT_MINOR" -eq "$GLOBAL_MINOR" ] && [ "$NEXT_PATCH" -gt "$GLOBAL_PATCH" ]; then
+          IS_LATEST="true"
+        fi
+
+        echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "next_version_short=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+        echo "is_latest_version=$IS_LATEST" >> "$GITHUB_OUTPUT"
 
         echo "::notice::Built version: $VERSION"
         echo "::notice::Built version-short: $VERSION_SHORT"
+        echo "::notice::Is latest version: $IS_LATEST"
 
         {
           echo "### tag-builder"
           echo "- Target branch: ${{ inputs.target-branch }}"
-          echo "- Latest tag: ${{ steps.latest.outputs.latest_tag }}"
+          echo "- Latest target tag: ${{ steps.latest.outputs.latest_tag }}"
+          echo "- Global latest tag: ${{ steps.global.outputs.global_latest_base }}"
           echo "- Current version: ${{ inputs.current-version }}"
           echo "- Patch mode: $PATCH_MODE"
           echo "- Built version: $VERSION"
           echo "- Built version-short: $VERSION_SHORT"
+          echo "- Is latest version: $IS_LATEST"
         } >> "$GITHUB_STEP_SUMMARY"

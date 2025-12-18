@@ -1,0 +1,133 @@
+name: docker-tag-builder
+description: Build Docker image tags based on version, target branch, and latest version detection
+
+inputs:
+  version:
+    description: "Version to tag (e.g., v1.2.12, 1.2.12)"
+    required: true
+  target-branch:
+    description: "Target branch name (e.g., main, v1.2, develop)"
+    required: true
+  is-latest-version:
+    description: "Whether this is the latest version globally (true/false)"
+    required: true
+  tag-levels:
+    description: "Version levels to tag: patch, minor, major, latest (comma-separated, default: patch)"
+    required: false
+    default: 'patch'
+
+outputs:
+  docker-tags:
+    description: "Comma-separated list of Docker tags"
+    value: ${{ steps.build.outputs.docker_tags }}
+  exact-tag:
+    description: "Exact version tag (e.g., v1.2.12)"
+    value: ${{ steps.build.outputs.exact_tag }}
+  latest-tag:
+    description: "Latest tag (latest), empty if not created"
+    value: ${{ steps.build.outputs.latest_tag }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Docker tags
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        VERSION="${{ inputs.version }}"
+        IS_LATEST="${{ inputs.is-latest-version }}"
+        TAG_LEVELS="${{ inputs.tag-levels }}"
+
+        # Validate version format
+        if [[ ! "$VERSION" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+          echo "::error::Invalid version format: $VERSION"
+          echo "::error::Expected format: [v]X.Y.Z[+postfix]"
+          exit 1
+        fi
+
+        PREFIX="${BASH_REMATCH[1]}"
+        MAJOR="${BASH_REMATCH[2]}"
+        MINOR="${BASH_REMATCH[3]}"
+        PATCH="${BASH_REMATCH[4]}"
+        POSTFIX="${BASH_REMATCH[5]}"
+
+        # Strip postfix for Docker tags (should be clean semver)
+        EXACT_TAG="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+
+        # Parse tag levels
+        DOCKER_TAGS=""
+
+        # Process tag-levels input
+        IFS=',' read -ra LEVELS <<< "$TAG_LEVELS"
+        for level in "${LEVELS[@]}"; do
+          level=$(echo "$level" | xargs)  # trim whitespace
+
+          case "$level" in
+            patch)
+              if [ -z "$DOCKER_TAGS" ]; then
+                DOCKER_TAGS="$EXACT_TAG"
+              else
+                DOCKER_TAGS="$DOCKER_TAGS,$EXACT_TAG"
+              fi
+              echo "::notice::Adding patch-level tag: $EXACT_TAG"
+              ;;
+            minor)
+              if [ -z "$DOCKER_TAGS" ]; then
+                DOCKER_TAGS="${PREFIX}${MAJOR}.${MINOR}"
+              else
+                DOCKER_TAGS="$DOCKER_TAGS,${PREFIX}${MAJOR}.${MINOR}"
+              fi
+              echo "::notice::Adding minor-level tag: ${PREFIX}${MAJOR}.${MINOR}"
+              ;;
+            major)
+              if [ -z "$DOCKER_TAGS" ]; then
+                DOCKER_TAGS="${PREFIX}${MAJOR}"
+              else
+                DOCKER_TAGS="$DOCKER_TAGS,${PREFIX}${MAJOR}"
+              fi
+              echo "::notice::Adding major-level tag: ${PREFIX}${MAJOR}"
+              ;;
+            latest)
+              if [[ "$IS_LATEST" == "true" ]]; then
+                if [ -z "$DOCKER_TAGS" ]; then
+                  DOCKER_TAGS="latest"
+                else
+                  DOCKER_TAGS="$DOCKER_TAGS,latest"
+                fi
+                echo "::notice::Adding latest tag: latest"
+              else
+                echo "::notice::Not the latest version globally, skipping :latest tag"
+              fi
+              ;;
+            *)
+              echo "::warning::Unknown tag level: $level (valid: patch, minor, major, latest)"
+              ;;
+          esac
+        done
+
+        # Ensure at least exact tag is present if no valid levels provided
+        if [ -z "$DOCKER_TAGS" ]; then
+          DOCKER_TAGS="$EXACT_TAG"
+          echo "::notice::No valid tag levels, using exact tag: $EXACT_TAG"
+        fi
+
+        # Determine latest tag output
+        LATEST_TAG=""
+        if [[ "$DOCKER_TAGS" =~ (^|,)latest(,|$) ]]; then
+          LATEST_TAG="latest"
+        fi
+
+        echo "exact_tag=$EXACT_TAG" >> "$GITHUB_OUTPUT"
+        echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+        echo "docker_tags=$DOCKER_TAGS" >> "$GITHUB_OUTPUT"
+
+        echo "::notice::Docker tags: $DOCKER_TAGS"
+
+        {
+          echo "### docker-tag-builder"
+          echo "- Is latest version: $IS_LATEST"
+          echo "- Tag levels: $TAG_LEVELS"
+          echo "- Docker tags: \`$DOCKER_TAGS\`"
+        } >> "$GITHUB_STEP_SUMMARY"

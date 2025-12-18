@@ -1,216 +1,133 @@
 name: git-tag-builder
-description: Build the next semver git tag from the source version while preventing drift.
+description: Create git tags based on version and target branch with optional branch-level tagging
 
 inputs:
-  tagging-mode:
-    description: "Mode to calculate next tag"
+  version:
+    description: "Version to tag (e.g., v1.2.12, 1.2.12)"
     required: true
-  branch-name:
-    description: "Current branch name"
+  target-branch:
+    description: "Target branch name (e.g., main, v1.2, develop)"
     required: true
-  tagging-patch:
-    description: "Patch next tag (true/false)"
+  enable-branch-tag:
+    description: "Enable branch-level tagging when branch name is version-like (default: true)"
     required: false
-    default: 'false'
-  source-version:
-    description: "Version read from source (e.g. package.json)"
-    required: false
-    default: ''
+    default: 'true'
 
 outputs:
-  last-tag:
-    description: "Latest git tag including the detected prefix"
-    value: ${{ steps.build.outputs.last_tag }}
-  last-tag-short:
-    description: "Latest semver git tag without prefix"
-    value: ${{ steps.build.outputs.last_tag_short }}
-  next-tag:
-    description: "Next git tag including the detected prefix"
-    value: ${{ steps.build.outputs.next_tag }}
-  next-tag-short:
-    description: "Next semver tag without prefix"
-    value: ${{ steps.build.outputs.next_tag_short }}
+  tags-created:
+    description: "List of git tags created (space-separated)"
+    value: ${{ steps.tag.outputs.tags_created }}
+  exact-tag:
+    description: "Exact version tag created (e.g., v1.2.12)"
+    value: ${{ steps.tag.outputs.exact_tag }}
+  branch-tag:
+    description: "Branch-level tag created (e.g., v1.2), empty if not created"
+    value: ${{ steps.tag.outputs.branch_tag }}
 
 runs:
   using: "composite"
   steps:
-    - name: Validate Target Version
-      id: source
+    - name: Parse version and create tags
+      id: tag
       shell: bash
       run: |
         set -euo pipefail
-        if [[ "${{ inputs.tagging-mode }}" == "branch" ]]; then
-          VERSION="${{ inputs.branch-name }}"
-          echo "::notice::version used from branch-name > $VERSION"
-        else
-          VERSION="${{ inputs.source-version }}"
-          echo "::notice::version used from source-version > $VERSION"
-        fi 
 
-        if [[ -z "$VERSION" ]]; then
-          echo "::error::either branch-name or the source-version input is required."
+        VERSION="${{ inputs.version }}"
+        TARGET_BRANCH="${{ inputs.target-branch }}"
+        ENABLE_BRANCH_TAG="${{ inputs.enable-branch-tag }}"
+
+        # Validate version format
+        if [[ ! "$VERSION" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+          echo "::error::Invalid version format: $VERSION"
+          echo "::error::Expected format: [v]X.Y.Z[+postfix]"
           exit 1
         fi
 
-        if [[ "$VERSION" =~ ^([^0-9]*)([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-          VERSION_PREFIX="${BASH_REMATCH[1]}"
-          VERSION_BASE="${BASH_REMATCH[2]}"
-        else
-          echo "::error::Version '$VERSION' must follow optional-prefix+x.y.z"
+        PREFIX="${BASH_REMATCH[1]}"
+        MAJOR="${BASH_REMATCH[2]}"
+        MINOR="${BASH_REMATCH[3]}"
+        PATCH="${BASH_REMATCH[4]}"
+        POSTFIX="${BASH_REMATCH[5]}"
+
+        # Strip postfix for tagging (git tags should be clean semver)
+        EXACT_TAG="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+
+        echo "::notice::Creating exact version tag: $EXACT_TAG"
+
+        # Create exact version tag
+        if git rev-parse "$EXACT_TAG" >/dev/null 2>&1; then
+          echo "::error::Tag $EXACT_TAG already exists"
           exit 1
         fi
 
-        IFS=. read -r SRC_MAJOR SRC_MINOR SRC_PATCH <<< "$VERSION_BASE"
+        git tag "$EXACT_TAG"
+        TAGS_CREATED="$EXACT_TAG"
 
-        echo "version=$VERSION_BASE" >> "$GITHUB_OUTPUT"
-        echo "prefix=$VERSION_PREFIX" >> "$GITHUB_OUTPUT"
-        echo "src_major=$SRC_MAJOR" >> "$GITHUB_OUTPUT"
-        echo "src_minor=$SRC_MINOR" >> "$GITHUB_OUTPUT"
-        echo "src_patch=$SRC_PATCH" >> "$GITHUB_OUTPUT"
+        # Determine if we should create a branch-level tag
+        BRANCH_TAG=""
+        if [[ "$ENABLE_BRANCH_TAG" == "true" ]]; then
+          # Check if target branch name is version-like (e.g., v1.2, 1.2, v1)
+          if [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
+            # Branch is major.minor format (e.g., v1.2)
+            BRANCH_PREFIX="${BASH_REMATCH[1]}"
+            BRANCH_MAJOR="${BASH_REMATCH[2]}"
+            BRANCH_MINOR="${BASH_REMATCH[3]}"
+            BRANCH_TAG="${BRANCH_PREFIX}${BRANCH_MAJOR}.${BRANCH_MINOR}"
 
-    - name: Discover latest git tag
-      id: git
-      shell: bash
-      run: |
-        set -euo pipefail
-        PREFIX='${{ steps.source.outputs.prefix }}'
+            # Only create branch tag if it matches current version's major.minor
+            if [ "$BRANCH_MAJOR" == "$MAJOR" ] && [ "$BRANCH_MINOR" == "$MINOR" ]; then
+              echo "::notice::Creating branch-level tag: $BRANCH_TAG"
 
-        git fetch --tags --force >/dev/null 2>&1 || true
-
-        RAW_TAGS=$(git tag --list | sed 's/^\s*//;s/\s*$//;' || true)
-        SEMVER_TAGS=""
-        if [ -n "$RAW_TAGS" ]; then
-          while IFS= read -r TAG; do
-            [ -z "$TAG" ] && continue
-            BASE=""
-            if echo "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-              BASE="$TAG"
-            elif echo "$TAG" | grep -Eq '^[vV][0-9]+\.[0-9]+\.[0-9]+$'; then
-              BASE="${TAG:1}"
-            elif [ -n "$PREFIX" ] && [[ "$TAG" == "$PREFIX"* ]]; then
-              CAND="${TAG#$PREFIX}"
-              if echo "$CAND" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-                BASE="$CAND"
+              # Delete existing branch tag if it exists (we're updating it)
+              if git rev-parse "$BRANCH_TAG" >/dev/null 2>&1; then
+                echo "::notice::Updating existing branch tag: $BRANCH_TAG"
+                git tag -d "$BRANCH_TAG" >/dev/null 2>&1 || true
+                git push origin ":refs/tags/$BRANCH_TAG" >/dev/null 2>&1 || true
               fi
+
+              git tag "$BRANCH_TAG"
+              TAGS_CREATED="$TAGS_CREATED $BRANCH_TAG"
+            else
+              echo "::notice::Branch version ($BRANCH_MAJOR.$BRANCH_MINOR) does not match current version ($MAJOR.$MINOR), skipping branch tag"
             fi
+          elif [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
+            # Branch is major-only format (e.g., v1)
+            BRANCH_PREFIX="${BASH_REMATCH[1]}"
+            BRANCH_MAJOR="${BASH_REMATCH[2]}"
+            BRANCH_TAG="${BRANCH_PREFIX}${BRANCH_MAJOR}"
 
-            if [ -n "$BASE" ]; then
-              SEMVER_TAGS+="$BASE\n"
+            # Only create branch tag if it matches current version's major
+            if [ "$BRANCH_MAJOR" == "$MAJOR" ]; then
+              echo "::notice::Creating branch-level tag: $BRANCH_TAG"
+
+              # Delete existing branch tag if it exists (we're updating it)
+              if git rev-parse "$BRANCH_TAG" >/dev/null 2>&1; then
+                echo "::notice::Updating existing branch tag: $BRANCH_TAG"
+                git tag -d "$BRANCH_TAG" >/dev/null 2>&1 || true
+                git push origin ":refs/tags/$BRANCH_TAG" >/dev/null 2>&1 || true
+              fi
+
+              git tag "$BRANCH_TAG"
+              TAGS_CREATED="$TAGS_CREATED $BRANCH_TAG"
+            else
+              echo "::notice::Branch version ($BRANCH_MAJOR) does not match current version ($MAJOR), skipping branch tag"
             fi
-          done <<< "$RAW_TAGS"
-        fi
-
-        LAST_TAG_BASE="0.0.0"
-        if [ -n "$SEMVER_TAGS" ]; then
-          LAST_TAG_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
-        fi
-
-        IFS=. read -r GIT_MAJOR GIT_MINOR GIT_PATCH <<< "$LAST_TAG_BASE"
-        GIT_PREFIXED="$PREFIX$LAST_TAG_BASE"
-
-        echo "last_tag_base=$LAST_TAG_BASE" >> "$GITHUB_OUTPUT"
-        echo "git_prefixed=$GIT_PREFIXED" >> "$GITHUB_OUTPUT"
-        echo "git_major=$GIT_MAJOR" >> "$GITHUB_OUTPUT"
-        echo "git_minor=$GIT_MINOR" >> "$GITHUB_OUTPUT"
-        echo "git_patch=$GIT_PATCH" >> "$GITHUB_OUTPUT"
-
-    - name: Ensure git is not ahead of source
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        SRC_VERSION='${{ steps.source.outputs.version }}'
-        SRC_MAJOR='${{ steps.source.outputs.src_major }}'
-        SRC_MINOR='${{ steps.source.outputs.src_minor }}'
-        SRC_PATCH='${{ steps.source.outputs.src_patch }}'
-        
-        LAST_TAG='${{ steps.git.outputs.last_tag_base }}'
-        GIT_MAJOR='${{ steps.git.outputs.git_major }}'
-        GIT_MINOR='${{ steps.git.outputs.git_minor }}'
-        GIT_PATCH='${{ steps.git.outputs.git_patch }}'
-
-        if [ "$GIT_MAJOR" -gt "$SRC_MAJOR" ]; then
-          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (major drift)"
-          exit 1
-        fi
-
-        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -gt "$SRC_MINOR" ]; then
-          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (minor drift)"
-          exit 1
-        fi
-
-        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ] && [ "$GIT_PATCH" -gt "$SRC_PATCH" ]; then
-          echo "::error::Git last tag $LAST_TAG is ahead of source version $SRC_VERSION (patch drift)"
-          exit 1
-        fi
-
-        echo "::notice::Git history is aligned with source version $SRC_VERSION"
-
-    - name: Build Next Tag
-      id: build
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        SRC_VERSION='${{ steps.source.outputs.version }}'
-        SRC_PREFIX='${{ steps.source.outputs.prefix }}'
-        SRC_MAJOR='${{ steps.source.outputs.src_major }}'
-        SRC_MINOR='${{ steps.source.outputs.src_minor }}'
-        SRC_PATCH='${{ steps.source.outputs.src_patch }}'
-        
-        LAST_TAG_BASE='${{ steps.git.outputs.last_tag_base }}'
-        GIT_MAJOR='${{ steps.git.outputs.git_major }}'
-        GIT_MINOR='${{ steps.git.outputs.git_minor }}'
-        GIT_PATCH='${{ steps.git.outputs.git_patch }}'
-
-        NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$SRC_PATCH"
-        if [ "$GIT_MAJOR" -eq "$SRC_MAJOR" ] && [ "$GIT_MINOR" -eq "$SRC_MINOR" ]; then
-          if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
-            echo "::notice::Use tag patching: true (tagging-patch = true)"
-            NEXT_PATCH=$((GIT_PATCH + 1))
-            NEXT_TAG="$SRC_MAJOR.$SRC_MINOR.$NEXT_PATCH"
+          else
+            echo "::notice::Branch name '$TARGET_BRANCH' is not version-like, skipping branch tag"
           fi
-        else
-          if [[ "${{ inputs.tagging-patch }}" == "true" ]]; then
-            echo "::notice::Use tag patching: false (new tag $SRC_MAJOR.$SRC_MINOR is ahead latest tag $GIT_MAJOR.$GIT_MINOR)"
-          fi 
         fi
 
-        PREF_NEXT="$SRC_PREFIX$NEXT_TAG"
-        if [ -n "$SRC_PREFIX" ] && git tag --list "$PREF_NEXT" | grep -qx "$PREF_NEXT"; then
-          echo "::error::Tag $PREF_NEXT already exists."
-          exit 1
-        fi
+        echo "exact_tag=$EXACT_TAG" >> "$GITHUB_OUTPUT"
+        echo "branch_tag=$BRANCH_TAG" >> "$GITHUB_OUTPUT"
+        echo "tags_created=$TAGS_CREATED" >> "$GITHUB_OUTPUT"
 
-        if git tag --list "v$NEXT_TAG" | grep -qx "v$NEXT_TAG"; then
-          echo "::error::Tag v$NEXT_TAG already exists."
-          exit 1
-        fi
-
-        if git tag --list "$NEXT_TAG" | grep -qx "$NEXT_TAG"; then
-          echo "::error::Tag $NEXT_TAG already exists."
-          exit 1
-        fi
-
-        if [ -z "$SRC_PREFIX" ]; then
-          LAST_WITH_PREFIX="$LAST_TAG_BASE"
-          NEXT_WITH_PREFIX="$NEXT_TAG"
-        else
-          LAST_WITH_PREFIX="$SRC_PREFIX$LAST_TAG_BASE"
-          NEXT_WITH_PREFIX="$PREF_NEXT"
-        fi
-
-        echo "::notice::Git last tag: $LAST_WITH_PREFIX"
-        echo "::notice::Next tag candidate: $NEXT_WITH_PREFIX"
-        
-        echo "last_tag=$LAST_WITH_PREFIX" >> "$GITHUB_OUTPUT"
-        echo "last_tag_short=$LAST_TAG_BASE" >> "$GITHUB_OUTPUT"
-        echo "next_tag=$NEXT_WITH_PREFIX" >> "$GITHUB_OUTPUT"
-        echo "next_tag_short=$NEXT_TAG" >> "$GITHUB_OUTPUT"
-        
         {
           echo "### git-tag-builder"
-          echo "- Git last tag: $LAST_WITH_PREFIX"
-          echo "- Source version: ${SRC_PREFIX}${SRC_VERSION}"
-          echo "- Next tag candidate: $NEXT_WITH_PREFIX"
+          echo "- Target branch: $TARGET_BRANCH"
+          echo "- Exact tag: $EXACT_TAG"
+          if [ -n "$BRANCH_TAG" ]; then
+            echo "- Branch tag: $BRANCH_TAG"
+          fi
+          echo "- Tags created: $TAGS_CREATED"
         } >> "$GITHUB_STEP_SUMMARY"

@@ -15,27 +15,54 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 
 ## Inputs
 
-| Name                       | Type    | Required | Default | Description |
-|----------------------------|---------|----------|---------|-------------|
-| `node-version`             | string  | No       | `''`    | Node.js version passed to `actions/setup-node`. Required when `node-version-env` is not provided. |
-| `node-version-env`         | string  | No       | `''`    | Path to env file exporting `NODE_VERSION` (e.g., `.env.build`). Overrides `node-version` when provided. |
-| `enable-cache`             | boolean | No       | `true`  | Enable npm caching in `actions/setup-node`. Requires `package-lock.json` to be committed. |
-| `lint-script`              | string  | No       | `''`    | npm script name for linting (e.g., `lint`). Leave blank to skip. |
-| `prettier-script`          | string  | No       | `''`    | npm script name for Prettier checks (e.g., `format:check`). Leave blank to skip. |
-| `badges-script`            | string  | No       | `''`    | npm script to refresh README/coverage badges. Leave blank to skip. |
-| `test-script`              | string  | No       | `''`    | npm script to run test suite (e.g., `test`, `test:ci`). Leave blank to skip. |
-| `docker-image-name`        | string  | No       | `''`    | Docker image name for builds (e.g., `ghcr.io/org/app`). Leave blank to skip Docker jobs. |
-| `docker-image-tagging`     | boolean | No       | `false` | Enable Docker image tagging. |
-| `docker-image-tagging-level` | number | No      | -       | Docker image tagging levels. |
-| `tagging-mode`             | string  | No       | `''`    | Version source for tagging. Values: `nodejs` (from package.json), `branch` (from branch name). Leave blank to skip tagging jobs. |
-| `tagging-patch`            | boolean | No       | `false` | Enable patch mode for automatic patch version increments when major.minor match latest tag. |
+### Testing
+
+| Name                | Type    | Required | Default | Description |
+|---------------------|---------|----------|---------|-------------|
+| `node-version`      | string  | No       | `''`    | Node.js version to use (e.g., `'20'`, `'22'`). Required when `node-version-env` is not provided. |
+| `node-version-env`  | string  | No       | `''`    | Path to env file exporting `NODE_VERSION` (e.g., `.env.build`). Overrides `node-version` when provided. |
+| `enable-cache`      | boolean | No       | `true`  | Enable npm caching in `actions/setup-node`. Requires `package-lock.json` to be committed. |
+| `lint-script`       | string  | No       | `''`    | npm script to run linting (e.g., `lint`). Leave blank to skip. |
+| `prettier-script`   | string  | No       | `''`    | npm script to run Prettier in check mode (e.g., `format:check`). Leave blank to skip. |
+| `badges-script`     | string  | No       | `''`    | npm script to refresh README/coverage badges. Leave blank to skip. |
+| `test-script`       | string  | No       | `''`    | npm script to run test suite (e.g., `test`, `test:ci`). Leave blank to skip. |
+
+### Tagging
+
+| Name                  | Type    | Required | Default | Description |
+|-----------------------|---------|----------|---------|-------------|
+| `tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `target` (git tags). Leave blank to skip tagging jobs. |
+| `tag-increment-patch` | boolean | No       | `false` | Auto-increment patch version when major.minor match latest tag. |
+
+### Docker
+
+| Name                       | Type    | Required | Default         | Description |
+|----------------------------|---------|----------|-----------------|-------------|
+| `docker-image-name`        | string  | No       | `''`            | Docker image name (e.g., `ghcr.io/org/app`). Leave blank to skip Docker builds. |
+| `docker-build-context`     | string  | No       | `'.'`           | Docker build context path. |
+| `docker-build-args-file`   | string  | No       | `''`            | Path to file with Docker build args. Leave blank to skip. |
+| `docker-build-options`     | string  | No       | `'--no-cache'`  | Additional Docker build options. |
+| `docker-build-reproducible`| boolean | No       | `true`          | Build reproducible Docker image with `SOURCE_DATE_EPOCH`. |
+| `docker-tag-levels`        | string  | No       | `'patch,latest'`| Version levels to tag: `patch`, `minor`, `major`, `latest` (comma-separated). |
 
 ### Input Notes
 
+**Testing:**
 - **Node.js Version**: Provide either `node-version` OR `node-version-env`. The workflow will fail if both are empty.
 - **Scripts**: All script inputs default to empty strings. When empty, the test action skips that step and logs it in the workflow summary.
-- **Docker**: Docker jobs only run when `docker-image-name` is provided.
-- **Tagging**: Tagging jobs only run when `tagging-mode` is provided. Use `nodejs` to read version from package.json, or `branch` to extract version from branch name.
+
+**Tagging:**
+- Tagging jobs only run when `tag-source` is provided.
+- Use `nodejs` to read version from package.json, `flutter` for pubspec.yaml, or `target` to read from git tags.
+- `tag-increment-patch` automatically increments patch version when major.minor match the latest tag.
+
+**Docker:**
+- Docker jobs only run when `docker-image-name` is provided.
+- `docker-build-context` defaults to repository root (`.`).
+- `docker-build-args-file` is optional - provide path to a file containing build args (one per line, format: `ARG=value`).
+- `docker-build-options` defaults to `--no-cache` for clean builds.
+- `docker-build-reproducible` uses `SOURCE_DATE_EPOCH` from git commit timestamp for reproducible builds.
+- `docker-tag-levels` controls which version tags to create (defaults to `patch,latest`).
 
 ## Permissions
 
@@ -137,7 +164,7 @@ This means:
 
 **Runs when**:
 ```yaml
-is-pull-request == 'true' AND tagging-mode != ''
+is-pull-request == 'true' AND tag-source != ''
 ```
 
 This means:
@@ -148,12 +175,12 @@ This means:
 **Steps**:
 1. Checkout repository with full history (`fetch-depth: 0`)
 2. Read current version using `version-reader` action:
-   - Type: `nodejs` or `branch` (from `tagging-mode` input)
-   - Source branch: from `setup` job outputs
+   - Type: `nodejs`, `flutter`, or `target` (from `tag-source` input)
+   - Target branch: from `setup` job outputs
 3. Build next version using `tag-builder` action:
    - Target branch: from `setup` job outputs
    - Current version: from version-reader step
-   - Patch mode: from `tagging-patch` input
+   - Patch mode: from `tag-increment-patch` input
 
 **Uses actions**:
 - `draftm0de/github.workflows/.github/actions/version-reader@main`
@@ -178,30 +205,36 @@ The workflow uses the `git-state` action to implement intelligent test execution
 
 This prevents duplicate test runs when both events trigger for the same commit.
 
-### Version Reading Modes
+### Tag Source Modes
 
-**`tagging-mode: nodejs`:**
+**`tag-source: nodejs`:**
 - Reads version from `package.json` in repository root
 - Validates version matches semantic version pattern
 - Fails if package.json missing or version invalid
 - Use for: Node.js projects with version in package.json
 
-**`tagging-mode: branch`:**
-- Extracts version from branch name (e.g., `v1.2.3`, `release/v1.2.3`, `v1.2`)
-- Defaults patch to `0` if only major.minor found
-- Fails if no version pattern found in branch name
-- Use for: Version-based branch naming conventions
+**`tag-source: flutter`:**
+- Reads version from `pubspec.yaml` in repository root
+- Validates version matches semantic version pattern
+- Fails if pubspec.yaml missing or version invalid
+- Use for: Flutter projects with version in pubspec.yaml
 
-### Patch Mode
+**`tag-source: target`:**
+- Reads latest semantic version tag from target branch
+- Discovers tags using git history merged into target branch
+- Fails if no valid semantic version tags found
+- Use for: Branch-based versioning with git tags
 
-When `tagging-patch: true`:
+### Patch Auto-Increment
+
+When `tag-increment-patch: true`:
 
 1. Compares current version with latest tag from target branch
 2. If major.minor are the same: increments patch (e.g., `v1.2.3` → `v1.2.4`)
 3. If major or minor increased: uses version as-is with patch `0`
 4. Prevents version drift and ensures monotonic versioning
 
-When `tagging-patch: false`:
+When `tag-increment-patch: false`:
 - Uses exact version from source
 - Fails if version already exists or is older than latest tag
 
@@ -249,9 +282,12 @@ jobs:
       lint-script: 'lint'
       prettier-script: 'format:check'
       test-script: 'test:ci'
+      tag-source: 'nodejs'
+      tag-increment-patch: true
       docker-image-name: ghcr.io/my-org/my-app
-      tagging-mode: 'nodejs'
-      tagging-patch: true
+      docker-build-context: '.'
+      docker-build-args-file: '.build.args'
+      docker-tag-levels: 'patch,minor,major,latest'
     secrets: inherit
 ```
 
@@ -274,8 +310,8 @@ jobs:
       node-version-env: '.env.build'
       lint-script: 'lint'
       test-script: 'test'
-      tagging-mode: 'branch'
-      tagging-patch: false
+      tag-source: 'target'
+      tag-increment-patch: false
     secrets: inherit
 ```
 
@@ -328,7 +364,7 @@ The workflow currently handles the complete pull request validation pipeline. Pu
 - The workflow enforces that either `node-version` or `node-version-env` is provided
 - All test scripts are optional - skip by leaving blank
 - Docker jobs are opt-in via `docker-image-name` input
-- Tagging jobs are opt-in via `tagging-mode` input
+- Tagging jobs are opt-in via `tag-source` input
 - The PR guard prevents wasteful duplicate runs on the same branch
 - Full git history (`fetch-depth: 0`) is required for version comparison in tagging jobs
 - The workflow uses composite actions, making it easy to test and maintain individual components

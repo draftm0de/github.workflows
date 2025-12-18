@@ -1,47 +1,116 @@
-# Push Docker Image Action
+# Docker Push Action
 
-Composite action that loads a Docker image (either from the local daemon or a saved artifact), retags it if needed, logs into a registry, and performs `docker push`.
+Pushes a Docker image to a registry with multiple tags in a single operation.
 
 ## Inputs
-| Name                  | Description                                                                               | Required | Default |
-|-----------------------|-------------------------------------------------------------------------------------------|----------|---------|
-| `image`               | Local Docker image reference to push.                                                     | No       | —       |
-| `artifact`            | Artifact handle (`name/path`) created by [`artifact-from-image`](../artifact-from-image). | No       | —       |
-| `target`              | Optional tag applied prior to pushing (useful for promoting digests).                     | No       | —       |
-| `docker-username`     | Explicit registry username. Falls back to parsing the target reference.                   | No       | —       |
-| `docker-registry`     | Registry domain (leave blank for Docker Hub).                                             | No       | —       |
-| `secret-docker-token` | Password or token passed to `docker/login-action`.                                        | Yes      | —       |
 
-> Either `image` or `artifact` must be supplied.
+| Name       | Description                                                            | Required | Default |
+|------------|------------------------------------------------------------------------|----------|---------|
+| `image`    | Local Docker image name to push                                        | Yes      | -       |
+| `tags`     | Comma-separated list of tags to push (e.g., `v1.2.12,v1.2,latest`)    | Yes      | -       |
+| `registry` | Registry hostname (e.g., `ghcr.io`, leave blank for Docker Hub)        | No       | -       |
+| `username` | Registry username (inferred from first tag if not provided)            | No       | -       |
+| `password` | Registry password or token                                             | Yes      | -       |
 
-## Behavior
-1. Optional artifact download via [`artifact-to-image`](../artifact-to-image) loads the Docker image into the runner.
-2. The action validates local availability, infers a username (unless provided), and logs into the requested registry.
-3. If `target` is set, it retags the image before pushing; if `docker-registry` is set, it further namespaces the tag (for example `ghcr.io/org/app:sha`).
-4. Runs `docker push` and surfaces any failures immediately.
+## Outputs
 
-## Registry Notes (GHCR)
-- Enable `Read and write` workflow permissions plus `packages: write` when pushing to `ghcr.io` with `GITHUB_TOKEN`.
-- Organization repos must toggle **Settings → Actions → General → Workflow permissions** accordingly.
-- Built images appear under `https://github.com/<user_or_org>?tab=packages`.
+| Name          | Description                                                |
+|---------------|------------------------------------------------------------|
+| `tags-pushed` | Comma-separated list of fully-qualified tags that were pushed |
 
 ## Usage
+
+### With Docker Tag Builder
+
+```yaml
+- name: Build Docker tags
+  id: docker_tags
+  uses: draftm0de/github.workflows/.github/actions/docker-tag-builder@main
+  with:
+    version: v1.2.12
+    is-latest-version: 'true'
+    tag-levels: 'patch,minor,major,latest'
+
+- name: Push Docker image
+  uses: draftm0de/github.workflows/.github/actions/docker-push@main
+  with:
+    image: myapp:build
+    tags: ${{ steps.docker_tags.outputs.docker-tags }}
+    registry: ghcr.io
+    password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Push to Docker Hub
+
+```yaml
+- name: Push to Docker Hub
+  uses: draftm0de/github.workflows/.github/actions/docker-push@main
+  with:
+    image: myapp:build
+    tags: myorg/myapp:v1.2.12,myorg/myapp:latest
+    username: myorg
+    password: ${{ secrets.DOCKER_HUB_TOKEN }}
+```
+
+### Push to GHCR
+
 ```yaml
 permissions:
   contents: read
   packages: write
 
 jobs:
-  push-docker-image:
+  push:
     runs-on: ubuntu-latest
     steps:
-      - name: Push Docker image
+      - name: Push to GitHub Container Registry
         uses: draftm0de/github.workflows/.github/actions/docker-push@main
         with:
-          artifact: ${{ needs.build.outputs.artifact }}
-          target: ghcr.io/draftm0de/app:${{ github.sha }}
-          docker-registry: ghcr.io
-          secret-docker-token: ${{ secrets.GITHUB_TOKEN }}
+          image: myapp:build
+          tags: ghcr.io/myorg/myapp:v1.2.12,ghcr.io/myorg/myapp:latest
+          registry: ghcr.io
+          password: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Use the `artifact` output from the build action/workflow to avoid rebuilding before push jobs.
+## How It Works
+
+1. **Validation**: Checks that `image` exists locally and `tags` is provided
+2. **Username inference**: If `username` not provided, extracts from first tag (e.g., `ghcr.io/myorg/app` → `myorg`)
+3. **Registry login**: Uses `docker/login-action@v3` with provided credentials
+4. **Tag and push**: For each tag in comma-separated list:
+   - Tag local image with `<registry>/<tag>` (or just `<tag>` for Docker Hub)
+   - Push tagged image to registry
+5. **Summary**: Writes list of all pushed tags to workflow step summary
+
+## Registry Notes
+
+**GitHub Container Registry (ghcr.io):**
+- Requires `packages: write` permission
+- Use `GITHUB_TOKEN` as password
+- Username can be user or organization name
+- Images appear at `https://github.com/<user_or_org>?tab=packages`
+
+**Docker Hub:**
+- Leave `registry` input blank
+- Provide `username` explicitly (cannot be inferred for Docker Hub)
+- Use Docker Hub access token as `password`
+
+## Example Output
+
+When pushing `myapp:build` with tags `v1.2.12,v1.2,latest` to `ghcr.io`:
+
+```
+Tags pushed:
+- ghcr.io/myorg/myapp:v1.2.12
+- ghcr.io/myorg/myapp:v1.2
+- ghcr.io/myorg/myapp:latest
+```
+
+## Notes
+
+- All tags must be provided in a comma-separated list
+- Registry prefix is automatically added to each tag
+- Username inference works for registry-prefixed tags (e.g., `ghcr.io/user/app`, `docker.io/user/app`)
+- For Docker Hub without registry prefix, provide `username` explicitly
+- Action fails if image doesn't exist locally or if any push fails
+- See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

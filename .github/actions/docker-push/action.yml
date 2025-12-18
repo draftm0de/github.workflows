@@ -1,115 +1,133 @@
-name: Push Docker Image
-description: Push a Docker image (or saved artifact) to a registry
+name: docker-push
+description: Push Docker image to registry with multiple tags
 
 inputs:
   image:
-    description: Local Docker image name to push
+    description: "Local Docker image name to push"
+    required: true
+  tags:
+    description: "Comma-separated list of tags to push (e.g., 'v1.2.12,v1.2,latest')"
+    required: true
+  registry:
+    description: "Registry hostname (e.g., 'ghcr.io', leave blank for Docker Hub)"
     required: false
-  artifact:
-    description: Artifact identifier (name/path) to load an image from
+  username:
+    description: "Registry username (inferred from first tag if not provided)"
     required: false
-  target:
-    description: Optional retag to apply before pushing
-    required: false
-  docker-registry:
-    description: Registry hostname (defaults to Docker Hub)
-    required: false
-  docker-username:
-    description: Registry username override
-    required: false
-  secret-docker-token:
-    description: Docker/registry token or password
+  password:
+    description: "Registry password or token"
     required: true
 
-runs:
-  using: composite
-  steps:
-    - name: Load Docker image from artifact
-      id: load-image
-      if: ${{ inputs.artifact != '' }}
-      uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
-      with:
-        artifact: ${{ inputs.artifact }}
+outputs:
+  tags-pushed:
+    description: "Comma-separated list of fully-qualified tags that were pushed"
+    value: ${{ steps.push.outputs.tags_pushed }}
 
-    - name: Prepare push arguments
-      id: arguments
+runs:
+  using: "composite"
+  steps:
+    - name: Validate inputs
+      id: validate
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Preparing docker push arguments"
 
-        from_artifact="${{ inputs.artifact }}"
-        from_image="${{ inputs.image }}"
+        IMAGE="${{ inputs.image }}"
+        TAGS="${{ inputs.tags }}"
 
-        if [ -n "$from_artifact" ]; then
-          image="${{ steps.load-image.outputs.image }}"
-          if [ -z "$image" ]; then
-            echo "::error::Failed to load image reference from artifact"
+        if [ -z "$IMAGE" ]; then
+          echo "::error::Input 'image' is required"
+          exit 1
+        fi
+
+        if [ -z "$TAGS" ]; then
+          echo "::error::Input 'tags' is required"
+          exit 1
+        fi
+
+        if ! docker inspect --type=image "$IMAGE" >/dev/null 2>&1; then
+          echo "::error::Image '$IMAGE' not found locally"
+          exit 1
+        fi
+
+        echo "::notice::Validated image: $IMAGE"
+        echo "::notice::Tags to push: $TAGS"
+
+    - name: Determine registry username
+      id: username
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        USERNAME="${{ inputs.username }}"
+        TAGS="${{ inputs.tags }}"
+
+        if [ -z "$USERNAME" ]; then
+          FIRST_TAG=$(echo "$TAGS" | cut -d',' -f1 | xargs)
+          if [[ "$FIRST_TAG" =~ ^([^/]+)/.*$ ]]; then
+            USERNAME="${BASH_REMATCH[1]}"
+            echo "::notice::Inferred username from first tag: $USERNAME"
+          else
+            echo "::error::Cannot infer username from tag '$FIRST_TAG'. Please provide 'username' input."
             exit 1
           fi
-          echo "> image: $image (loaded from artifact)"
-        elif [ -n "$from_image" ]; then
-          image="$from_image"
-          echo "> image: $image (provided input)"
         else
-          echo "::error::Neither artifact nor image input provided"
-          exit 1
+          echo "::notice::Using provided username: $USERNAME"
         fi
 
-        if ! docker inspect --type=image "$image" >/dev/null 2>&1; then
-          echo "::error::Image $image is not available locally"
-          exit 1
-        fi
-
-        docker_username="${{ inputs.docker-username }}"
-        candidate="$image"
-        if [ -n "${{ inputs.target }}" ]; then
-          candidate="${{ inputs.target }}"
-        fi
-        if [ -z "$docker_username" ]; then
-          docker_username="${candidate%%/*}"
-          if [ "$docker_username" = "$candidate" ]; then
-            echo "::error::Could not infer docker-username from $image"
-            exit 1
-          fi
-        fi
-        echo "> docker username: $docker_username"
-
-        echo "::endgroup::"
-        echo "image=$image" >> "$GITHUB_OUTPUT"
-        echo "docker_username=$docker_username" >> "$GITHUB_OUTPUT"
+        echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
 
     - name: Login to registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ inputs.docker-registry }}
-        username: ${{ steps.arguments.outputs.docker_username }}
-        password: ${{ inputs.secret-docker-token }}
+        registry: ${{ inputs.registry }}
+        username: ${{ steps.username.outputs.username }}
+        password: ${{ inputs.password }}
 
     - name: Push Docker image
+      id: push
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Pushing docker image"
 
-        image="${{ steps.arguments.outputs.image }}"
-        target="${{ inputs.target }}"
-        registry="${{ inputs.docker-registry }}"
+        IMAGE="${{ inputs.image }}"
+        TAGS="${{ inputs.tags }}"
+        REGISTRY="${{ inputs.registry }}"
 
-        if [ -n "$target" ]; then
-          docker tag "$image" "$target"
-          echo "> tagged $image as $target"
-          image="$target"
-        fi
+        PUSHED_TAGS=""
 
-        if [ -n "$registry" ]; then
-          tagged="$registry/$image"
-          docker tag "$image" "$tagged"
-          echo "> namespaced $image as $tagged"
-          image="$tagged"
-        fi
+        IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
+        for tag in "${TAG_ARRAY[@]}"; do
+          tag=$(echo "$tag" | xargs)
 
-        echo "> push: $image"
-        docker push "$image"
+          if [ -n "$REGISTRY" ]; then
+            FULL_TAG="$REGISTRY/$tag"
+          else
+            FULL_TAG="$tag"
+          fi
 
-        echo "::endgroup::"
+          echo "::notice::Tagging $IMAGE as $FULL_TAG"
+          docker tag "$IMAGE" "$FULL_TAG"
+
+          echo "::notice::Pushing $FULL_TAG"
+          docker push "$FULL_TAG"
+
+          if [ -z "$PUSHED_TAGS" ]; then
+            PUSHED_TAGS="$FULL_TAG"
+          else
+            PUSHED_TAGS="$PUSHED_TAGS,$FULL_TAG"
+          fi
+        done
+
+        echo "tags_pushed=$PUSHED_TAGS" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### docker-push"
+          echo "- Source image: \`$IMAGE\`"
+          echo "- Registry: \`${REGISTRY:-Docker Hub}\`"
+          echo "- Tags pushed:"
+          IFS=',' read -ra PUSHED_ARRAY <<< "$PUSHED_TAGS"
+          for pushed in "${PUSHED_ARRAY[@]}"; do
+            echo "  - \`$pushed\`"
+          done
+        } >> "$GITHUB_STEP_SUMMARY"

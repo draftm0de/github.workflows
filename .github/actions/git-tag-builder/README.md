@@ -1,34 +1,108 @@
-# git-tag-builder
+# Git Tag Builder Action
 
-Composite action that proposes the next semantic version tag for a pull request. It can derive the version directly from the branch naming convention or from the package metadata, and applies guardrails so git history never outruns the declared version.
-
-## What it does
-1. Determine the source version:
-   - `tagging-mode=branch`: use the provided `branch-name` (e.g. `release/v1.2.3`).
-   - `tagging-mode=file`: use the provided `source-version` (usually read via `.github/actions/node-js-version-reader`).
-2. Split any non-numeric prefix (`v`, `release/`, etc.) from the `x.y.z` payload and validate that the base version is semver.
-3. Fetch tags, detect the latest semver value that either matches the prefix, `v<x.y.z>`, or a bare `<x.y.z>` tag.
-4. Fail when the git tag is ahead of the source version (major/minor/patch drift) so the repo cannot silently skip bumps.
-5. Build `next-tag-short`:
-   - Start from the source version.
-   - If `tagging-patch` is `true` and git already has the same major/minor, bump the patch beyond the latest git tag instead of reusing the same number.
-6. Ensure the prefixed version, `v<next-tag-short>`, and `<next-tag-short>` do not already exist.
-7. Emit `last_*` / `next_*` outputs plus a GitHub summary line so downstream workflows can decide whether to create a tag or update manifest files.
+Creates git tags based on version and target branch. Supports exact version tags and optional branch-level tags for version-like branches.
 
 ## Inputs
+
 | Name | Description | Required | Default |
-| --- | --- | --- | --- |
-| `tagging-mode` | Strategy used to derive the source version. Accepts `branch` or `file`. | Yes | — |
-| `branch-name` | Branch to parse when `tagging-mode=branch`. Usually comes from `.github/actions/git-state`. | Conditionally (branch mode) | — |
-| `source-version` | Version string (`<optional-prefix>x.y.z`) to parse when `tagging-mode=file`. | Conditionally (file mode) | `''` |
-| `tagging-patch` | When `true`, bump the patch when git already has the same major/minor to avoid duplicate tags. | No | `false` |
+|------|-------------|----------|---------|
+| `version` | Version to tag (e.g., `v1.2.12`, `1.2.12`) | Yes | - |
+| `target-branch` | Target branch name (e.g., `main`, `v1.2`, `develop`) | Yes | - |
+| `enable-branch-tag` | Enable branch-level tagging when branch is version-like | No | `'true'` |
 
 ## Outputs
-| Name | Description |
-| --- | --- |
-| `last-tag` | Latest git tag including the detected prefix (if any). |
-| `last-tag-short` | Latest semver git tag (x.y.z) without prefix. |
-| `next-tag` | Next git tag including the detected prefix (if any). |
-| `next-tag-short` | Next tag candidate (x.y.z) without prefix. |
 
-Use `next-tag` for the actual git tag to create (`git tag ${{ steps.tags.outputs['next-tag'] }}`) and `next-tag-short` when updating files that store bare versions such as `package.json`.
+| Name | Description |
+|------|-------------|
+| `tags-created` | List of git tags created (space-separated) |
+| `exact-tag` | Exact version tag created (e.g., `v1.2.12`) |
+| `branch-tag` | Branch-level tag created (e.g., `v1.2`), empty if not created |
+
+## Usage
+
+### Basic Usage
+
+```yaml
+- name: Create git tags
+  id: tagger
+  uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+  with:
+    version: v1.2.12
+    target-branch: v1.2
+
+- name: Push tags
+  run: |
+    git push origin ${{ steps.tagger.outputs.tags-created }}
+```
+
+### With Tag Builder
+
+```yaml
+- name: Build next version
+  id: tag_builder
+  uses: draftm0de/github.workflows/.github/actions/tag-builder@main
+  with:
+    target-branch: v1.2
+    current-version: v1.2.11
+    patch: 'true'
+
+- name: Create git tags
+  id: tagger
+  uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+  with:
+    version: ${{ steps.tag_builder.outputs.next-version-short }}
+    target-branch: v1.2
+
+- name: Push tags
+  run: |
+    git push origin --tags
+```
+
+### Disable Branch Tagging
+
+```yaml
+- name: Create git tags
+  uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+  with:
+    version: v1.2.12
+    target-branch: main
+    enable-branch-tag: 'false'
+```
+
+## How It Works
+
+**Exact Tag:**
+- Always creates a tag with the exact version (postfix stripped)
+- Example: Input `v1.2.12+build` → Creates tag `v1.2.12`
+
+**Branch Tag (when `enable-branch-tag: true`):**
+- Detects if branch name is version-like (`v1.2`, `1.2`, `v1`)
+- Creates/updates branch-level tag if version matches
+- Example: Branch `v1.2`, version `v1.2.12` → Creates tags `v1.2.12` and `v1.2`
+
+**Branch Tag Matching:**
+- Branch `v1.2` + version `v1.2.12` → Creates `v1.2` tag ✅
+- Branch `v1.2` + version `v2.0.0` → No branch tag ❌
+- Branch `main` + version `v1.2.12` → No branch tag (not version-like) ❌
+
+**Updating Branch Tags:**
+- Branch tags are updated (deleted and recreated) if they already exist
+- Exact tags must not exist (will error if duplicate)
+
+## Example Scenarios
+
+| Branch | Version | Exact Tag | Branch Tag | Notes |
+|--------|---------|-----------|------------|-------|
+| `v1.2` | `v1.2.12` | `v1.2.12` | `v1.2` | Both tags created |
+| `v1.2` | `v1.2.13` | `v1.2.13` | `v1.2` | Branch tag updated |
+| `v1.2` | `v2.0.0` | `v2.0.0` | - | Version doesn't match branch |
+| `main` | `v1.2.12` | `v1.2.12` | - | Branch not version-like |
+| `v1` | `v1.5.0` | `v1.5.0` | `v1` | Major-only branch |
+
+## Notes
+
+- Postfixes (e.g., `+build-123`) are stripped before tagging
+- Branch tags are "floating" - they move to the latest patch for that branch
+- Exact tags are immutable - action will error if tag already exists
+- Use with `git push origin --tags` or push specific tags from outputs
+- See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

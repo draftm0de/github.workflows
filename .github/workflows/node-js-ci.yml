@@ -4,47 +4,71 @@ on:
   workflow_call:
     inputs:
       node-version:
-        description: Optional Node.js version.
+        description: "Node.js version to use (e.g., '20', '22')"
         required: false
         type: string
       node-version-env:
-        description: Optional env file exporting NODE_VERSION; file is sourced when provided
+        description: "Path to env file exporting NODE_VERSION (e.g., '.env.build')"
         required: false
         type: string
       enable-cache:
-        description: Toggle npm caching via actions/setup-node (true/false)
+        description: "Enable npm caching via actions/setup-node"
         required: false
         type: boolean
         default: true
       lint-script:
-        description: npm script to lint the repo (set blank to skip).
+        description: "npm script to run linting (leave blank to skip)"
         required: false
         type: string
       prettier-script:
-        description: npm script that runs Prettier in check mode (set blank to skip).
+        description: "npm script to run Prettier in check mode (leave blank to skip)"
         required: false
         type: string
       badges-script:
-        description: npm script that refreshes README/coverage badges (set blank to skip).
+        description: "npm script to refresh README/coverage badges (leave blank to skip)"
         required: false
         type: string
       test-script:
-        description: npm script that runs the test suite (set blank to skip).
+        description: "npm script to run test suite (leave blank to skip)"
         required: false
         type: string
-      docker-image-name:
-        description: docker image name
+      tag-source:
+        description: "Version source type: nodejs, flutter, or target (leave blank to skip tagging)"
         required: false
         type: string
-      tagging-mode:
-        description: base for auto tagging branch and image (nodejs, branch)
-        required: false
-        type: string
-      tagging-patch:
-        description: patch provided tag base (true/false)
+      tag-increment-patch:
+        description: "Auto-increment patch version when major.minor match latest tag"
         required: false
         type: boolean
         default: false
+      docker-image-name:
+        description: "Docker image name (e.g., 'ghcr.io/org/app', leave blank to skip Docker builds)"
+        required: false
+        type: string
+      docker-build-context:
+        description: "Docker build context path"
+        required: false
+        type: string
+        default: "."
+      docker-build-args-file:
+        description: "Path to file with Docker build args (leave blank to skip)"
+        required: false
+        type: string
+      docker-build-options:
+        description: "Additional Docker build options"
+        required: false
+        type: string
+        default: "--no-cache"
+      docker-build-reproducible:
+        description: "Build reproducible Docker image with SOURCE_DATE_EPOCH"
+        required: false
+        type: boolean
+        default: true
+      docker-tag-levels:
+        description: "Version levels to tag: patch, minor, major, latest (comma-separated)"
+        required: false
+        type: string
+        default: "patch,latest"
 
 permissions:
   contents: read
@@ -104,10 +128,10 @@ jobs:
         id: build
         with:
           image: ${{ inputs.docker-image-name }}
-          context: '.'
-          build-args-file: '.build.args'
-          options: '--no-cache'
-          reproducible: 'true'
+          context: ${{ inputs.docker-build-context }}
+          build-args-file: ${{ inputs.docker-build-args-file }}
+          options: ${{ inputs.docker-build-options }}
+          reproducible: ${{ inputs.docker-build-reproducible }}
 
       - name: Upload Docker image
         id: upload
@@ -118,8 +142,8 @@ jobs:
   tag_on_pull:
     name: Tag calculation (pull request)
     if: |
-      needs.setup.outputs.is-pull-request == 'true' && 
-      inputs.tagging-mode != ''
+      needs.setup.outputs.is-pull-request == 'true' &&
+      inputs.tag-source != ''
     needs:
       - setup
       - tests
@@ -134,8 +158,7 @@ jobs:
         id: current-version
         uses: draftm0de/github.workflows/.github/actions/version-reader@main
         with:
-          type: ${{ inputs.tagging-mode }}
-          source-branch-name: ${{ needs.setup.outputs.source-branch-name }}
+          type: ${{ inputs.tag-source }}
           target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
 
       - name: Build next version
@@ -144,4 +167,4 @@ jobs:
         with:
           target-branch: ${{ needs.setup.outputs.target-branch-name }}
           current-version: ${{ steps.current-version.outputs.version }}
-          patch: ${{ inputs.tagging-patch }}
+          patch: ${{ inputs.tag-increment-patch }}
