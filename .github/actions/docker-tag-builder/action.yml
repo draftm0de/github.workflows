@@ -130,7 +130,7 @@ runs:
           echo "### docker-tag-builder"
           echo "- Is latest version: \`$IS_LATEST\`"
           echo "- Tag levels: \`$TAG_LEVELS\`"
-          echo "- Docker tags:"
+          echo "- Calculated docker tags:"
           for tag in $DOCKER_TAGS; do
             echo "  - \`$tag\`"
           done
