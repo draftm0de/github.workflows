@@ -225,6 +225,30 @@ jobs:
         with:
           image: ${{ steps.build.outputs.image }}
 
+  # general job to create and push git tags (only on push to release branch)
+  git_tag_push:
+    name: Push Git Tags
+    if: |
+      inputs.ci-tag-source != '' &&
+      github.event_name == 'push' &&
+      needs.setup.outputs.is-release-branch == 'true' &&
+      needs.auto_tagging.outputs.git-tags != ''
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - auto_tagging
+      - tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push git tags to remote
+        uses: draftm0de/github.workflows/.github/actions/git-push@main
+        with:
+          tags: ${{ needs.auto_tagging.outputs.git-tags }}
+
   # general job to push docker image to registry (only on push to release branch)
   docker_push:
     name: Push Docker Image

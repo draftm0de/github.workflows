@@ -1,0 +1,40 @@
+name: Git Push Tags
+description: Creates and pushes git tags to remote repository
+
+inputs:
+  tags:
+    description: Space-separated list of tags to create and push
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure git
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Create and push tags
+      shell: bash
+      run: |
+        TAGS="${{ inputs.tags }}"
+
+        if [ -z "$TAGS" ]; then
+          echo "No tags to push"
+          exit 0
+        fi
+
+        for tag in $TAGS; do
+          echo "Creating tag: $tag"
+          git tag -f "$tag"
+          git push -f origin "$tag"
+        done
+
+        {
+          echo "### git-push"
+          echo "- Tags pushed:"
+          for tag in $TAGS; do
+            echo "  - \`$tag\`"
+          done
+        } >> "$GITHUB_STEP_SUMMARY"

@@ -6,7 +6,7 @@ inputs:
     description: "Local Docker image name to push"
     required: true
   tags:
-    description: "Comma-separated list of tags to push (e.g., 'v1.2.12,v1.2,latest')"
+    description: "Space-separated list of tags to push (e.g., 'v1.2.12 v1.2 latest')"
     required: true
   registry:
     description: "Registry hostname (e.g., 'ghcr.io', leave blank for Docker Hub)"
@@ -20,7 +20,7 @@ inputs:
 
 outputs:
   tags-pushed:
-    description: "Comma-separated list of fully-qualified tags that were pushed"
+    description: "Space-separated list of fully-qualified tags that were pushed"
     value: ${{ steps.push.outputs.tags_pushed }}
 
 runs:
@@ -63,7 +63,7 @@ runs:
         TAGS="${{ inputs.tags }}"
 
         if [ -z "$USERNAME" ]; then
-          FIRST_TAG=$(echo "$TAGS" | cut -d',' -f1 | xargs)
+          FIRST_TAG=$(echo "$TAGS" | awk '{print $1}')
           if [[ "$FIRST_TAG" =~ ^([^/]+)/.*$ ]]; then
             USERNAME="${BASH_REMATCH[1]}"
             echo "::notice::Inferred username from first tag: $USERNAME"
@@ -96,10 +96,7 @@ runs:
 
         PUSHED_TAGS=""
 
-        IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-        for tag in "${TAG_ARRAY[@]}"; do
-          tag=$(echo "$tag" | xargs)
-
+        for tag in $TAGS; do
           if [ -n "$REGISTRY" ]; then
             FULL_TAG="$REGISTRY/$tag"
           else
@@ -115,7 +112,7 @@ runs:
           if [ -z "$PUSHED_TAGS" ]; then
             PUSHED_TAGS="$FULL_TAG"
           else
-            PUSHED_TAGS="$PUSHED_TAGS,$FULL_TAG"
+            PUSHED_TAGS="$PUSHED_TAGS $FULL_TAG"
           fi
         done
 
@@ -126,8 +123,7 @@ runs:
           echo "- Source image: \`$IMAGE\`"
           echo "- Registry: \`${REGISTRY:-Docker Hub}\`"
           echo "- Tags pushed:"
-          IFS=',' read -ra PUSHED_ARRAY <<< "$PUSHED_TAGS"
-          for pushed in "${PUSHED_ARRAY[@]}"; do
-            echo "  - \`$pushed\`"
+          for tag in $PUSHED_TAGS; do
+            echo "  - \`$tag\`"
           done
         } >> "$GITHUB_STEP_SUMMARY"

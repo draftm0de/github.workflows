@@ -62,10 +62,14 @@ runs:
           echo "has-open-pull-requests=true" >> "$GITHUB_OUTPUT"
           echo "source-branch-name=$GITHUB_HEAD_REF" >> "$GITHUB_OUTPUT"
           echo "target-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
-          echo "- [x] is-release-branch: $IS_RELEASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] has-open-pull-requests (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] source-branch-name: $GITHUB_HEAD_REF" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] target-branch-name: $GITHUB_BASE_REF" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### git-state"
+            echo "- Event type: \`pull_request\`"
+            echo "- Is release branch: \`$IS_RELEASE_BRANCH\`"
+            echo "- Has open pull requests: \`true\`"
+            echo "- Source branch: \`$GITHUB_HEAD_REF\`"
+            echo "- Target branch: \`$GITHUB_BASE_REF\`"
+          } >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi 
         
@@ -100,13 +104,19 @@ runs:
           COUNT="0"
         fi
 
-        echo "- [x] is-release-branch: $IS_RELEASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
         if [[ "$COUNT" == "0" ]]; then
           echo "has-open-pull-requests=false"  >> "$GITHUB_OUTPUT"
-          echo "- [ ] has-open-pull-requests (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
+          HAS_PR="false"
         else
           echo "has-open-pull-requests=true" >> "$GITHUB_OUTPUT"
-          echo "- [X] has-open-pull-requests (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
+          HAS_PR="true"
         fi
-        echo "- [x] source-branch-name: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
-        echo "- [x] target-branch-name: -" >> "$GITHUB_STEP_SUMMARY"
+
+        {
+          echo "### git-state"
+          echo "- Event type: \`push\`"
+          echo "- Is release branch: \`$IS_RELEASE_BRANCH\`"
+          echo "- Has open pull requests: \`$HAS_PR\`"
+          echo "- Source branch: \`$BRANCH\`"
+          echo "- Target branch: \`-\`"
+        } >> "$GITHUB_STEP_SUMMARY"

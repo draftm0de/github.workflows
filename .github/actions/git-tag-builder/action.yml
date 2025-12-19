@@ -183,9 +183,12 @@ runs:
 
         {
           echo "### git-tag-builder"
-          echo "- Target branch: $TARGET_BRANCH"
+          echo "- Target branch: \`$TARGET_BRANCH\`"
           if [ -n "$BRANCH_TAG" ]; then
-            echo "- Branch tag: $BRANCH_TAG"
+            echo "- Branch tag: \`$BRANCH_TAG\`"
           fi
-          echo "- Git Tags: $TAGS_CREATED"
+          echo "- Git tags calculated:"
+          for tag in $TAGS_CREATED; do
+            echo "  - \`$tag\`"
+          done
         } >> "$GITHUB_STEP_SUMMARY"
