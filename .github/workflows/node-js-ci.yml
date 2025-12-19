@@ -74,6 +74,11 @@ on:
         required: false
         type: string
         default: "patch,latest"
+      git-tag-levels:
+        description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches. 'latest' not allowed."
+        required: false
+        type: string
+        default: "patch"
       docker-registry:
         description: "Docker registry URL (e.g., 'ghcr.io', leave blank for Docker Hub)"
         required: false
@@ -158,6 +163,7 @@ jobs:
         with:
           version: ${{ steps.version.outputs.next-version-short }}
           target-branch: ${{ needs.setup.outputs.target-branch-name }}
+          git-tag-levels: ${{ inputs.git-tag-levels }}
 
   # node-js specific part about testing
   tests:

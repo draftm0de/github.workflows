@@ -113,4 +113,5 @@ Control which version tags to create using `tag-levels` (comma-separated):
 - Postfixes are stripped (Docker tags should be clean semver)
 - Branch tags are "floating" - they move to the latest patch
 - `:latest` tag only added when this is globally the newest version
+- Invalid tag levels will cause action to fail with exit code 1
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

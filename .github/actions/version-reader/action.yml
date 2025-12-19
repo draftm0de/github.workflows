@@ -151,7 +151,7 @@ runs:
 
         {
           echo "### version-reader"
-          echo "- Type: $TYPE"
+          echo "- CI tag source: $TYPE"
           if [[ "$TYPE" == "target" ]]; then
             echo "- Target branch: $TARGET_BRANCH"
           fi

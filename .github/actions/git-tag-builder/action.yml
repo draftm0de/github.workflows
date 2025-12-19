@@ -12,6 +12,10 @@ inputs:
     description: "Enable branch-level tagging when branch name is version-like (default: true)"
     required: false
     default: 'true'
+  git-tag-levels:
+    description: "Comma-separated tag levels to create: patch, minor, major (e.g., 'patch,minor,major'). Filters out levels already covered by version-like branches. Never includes 'latest'."
+    required: false
+    default: 'patch'
 
 outputs:
   git-tags:
@@ -36,6 +40,7 @@ runs:
         VERSION="${{ inputs.version }}"
         TARGET_BRANCH="${{ inputs.target-branch }}"
         ENABLE_BRANCH_TAG="${{ inputs.enable-branch-tag }}"
+        TAG_LEVELS="${{ inputs.git-tag-levels }}"
 
         # Validate version format
         if [[ ! "$VERSION" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
@@ -53,16 +58,76 @@ runs:
         # Strip postfix for tagging (git tags should be clean semver)
         EXACT_TAG="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
 
-        echo "::notice::Creating exact version tag: $EXACT_TAG"
+        echo "::notice::Calculated exact version tag: $EXACT_TAG"
 
-        # Create exact version tag
+        # Check if exact version tag already exists
         if git rev-parse "$EXACT_TAG" >/dev/null 2>&1; then
           echo "::error::Tag $EXACT_TAG already exists"
           exit 1
         fi
 
-        git tag "$EXACT_TAG"
         TAGS_CREATED="$EXACT_TAG"
+
+        # Determine which levels are already covered by branch tags
+        BRANCH_COVERS_MAJOR="false"
+        BRANCH_COVERS_MINOR="false"
+
+        if [[ "$ENABLE_BRANCH_TAG" == "true" ]]; then
+          if [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
+            BRANCH_MAJOR="${BASH_REMATCH[2]}"
+            BRANCH_MINOR="${BASH_REMATCH[3]}"
+            if [ "$BRANCH_MAJOR" == "$MAJOR" ] && [ "$BRANCH_MINOR" == "$MINOR" ]; then
+              BRANCH_COVERS_MAJOR="true"
+              BRANCH_COVERS_MINOR="true"
+            fi
+          elif [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
+            BRANCH_MAJOR="${BASH_REMATCH[2]}"
+            if [ "$BRANCH_MAJOR" == "$MAJOR" ]; then
+              BRANCH_COVERS_MAJOR="true"
+            fi
+          fi
+        fi
+
+        # Create multi-level tags based on git-tag-levels input
+        IFS=',' read -ra LEVELS <<< "$TAG_LEVELS"
+        for level in "${LEVELS[@]}"; do
+          level=$(echo "$level" | xargs)
+          case "$level" in
+            patch)
+              # Patch is always the exact tag, already added
+              ;;
+            minor)
+              # Only add minor tag if not covered by branch
+              if [ "$BRANCH_COVERS_MINOR" == "false" ]; then
+                MINOR_TAG="${PREFIX}${MAJOR}.${MINOR}"
+                if git rev-parse "$MINOR_TAG" >/dev/null 2>&1; then
+                  echo "::notice::Minor tag $MINOR_TAG already exists (will be updated when pushed)"
+                fi
+                TAGS_CREATED="$TAGS_CREATED $MINOR_TAG"
+                echo "::notice::Calculated minor-level tag: $MINOR_TAG"
+              else
+                echo "::notice::Skipping minor tag (covered by branch tag)"
+              fi
+              ;;
+            major)
+              # Only add major tag if not covered by branch
+              if [ "$BRANCH_COVERS_MAJOR" == "false" ]; then
+                MAJOR_TAG="${PREFIX}${MAJOR}"
+                if git rev-parse "$MAJOR_TAG" >/dev/null 2>&1; then
+                  echo "::notice::Major tag $MAJOR_TAG already exists (will be updated when pushed)"
+                fi
+                TAGS_CREATED="$TAGS_CREATED $MAJOR_TAG"
+                echo "::notice::Calculated major-level tag: $MAJOR_TAG"
+              else
+                echo "::notice::Skipping major tag (covered by branch tag)"
+              fi
+              ;;
+            *)
+              echo "::error::Unknown tag level '$level' (valid: patch, minor, major)"
+              exit 1
+              ;;
+          esac
+        done
 
         # Determine if we should create a branch-level tag
         BRANCH_TAG=""
@@ -75,18 +140,15 @@ runs:
             BRANCH_MINOR="${BASH_REMATCH[3]}"
             BRANCH_TAG="${BRANCH_PREFIX}${BRANCH_MAJOR}.${BRANCH_MINOR}"
 
-            # Only create branch tag if it matches current version's major.minor
+            # Only include branch tag if it matches current version's major.minor
             if [ "$BRANCH_MAJOR" == "$MAJOR" ] && [ "$BRANCH_MINOR" == "$MINOR" ]; then
-              echo "::notice::Creating branch-level tag: $BRANCH_TAG"
+              echo "::notice::Calculated branch-level tag: $BRANCH_TAG"
 
-              # Delete existing branch tag if it exists (we're updating it)
+              # Note if existing branch tag will be updated
               if git rev-parse "$BRANCH_TAG" >/dev/null 2>&1; then
-                echo "::notice::Updating existing branch tag: $BRANCH_TAG"
-                git tag -d "$BRANCH_TAG" >/dev/null 2>&1 || true
-                git push origin ":refs/tags/$BRANCH_TAG" >/dev/null 2>&1 || true
+                echo "::notice::Branch tag $BRANCH_TAG already exists (will be updated when pushed)"
               fi
 
-              git tag "$BRANCH_TAG"
               TAGS_CREATED="$TAGS_CREATED $BRANCH_TAG"
             else
               echo "::notice::Branch version ($BRANCH_MAJOR.$BRANCH_MINOR) does not match current version ($MAJOR.$MINOR), skipping branch tag"
@@ -97,18 +159,15 @@ runs:
             BRANCH_MAJOR="${BASH_REMATCH[2]}"
             BRANCH_TAG="${BRANCH_PREFIX}${BRANCH_MAJOR}"
 
-            # Only create branch tag if it matches current version's major
+            # Only include branch tag if it matches current version's major
             if [ "$BRANCH_MAJOR" == "$MAJOR" ]; then
-              echo "::notice::Creating branch-level tag: $BRANCH_TAG"
+              echo "::notice::Calculated branch-level tag: $BRANCH_TAG"
 
-              # Delete existing branch tag if it exists (we're updating it)
+              # Note if existing branch tag will be updated
               if git rev-parse "$BRANCH_TAG" >/dev/null 2>&1; then
-                echo "::notice::Updating existing branch tag: $BRANCH_TAG"
-                git tag -d "$BRANCH_TAG" >/dev/null 2>&1 || true
-                git push origin ":refs/tags/$BRANCH_TAG" >/dev/null 2>&1 || true
+                echo "::notice::Branch tag $BRANCH_TAG already exists (will be updated when pushed)"
               fi
 
-              git tag "$BRANCH_TAG"
               TAGS_CREATED="$TAGS_CREATED $BRANCH_TAG"
             else
               echo "::notice::Branch version ($BRANCH_MAJOR) does not match current version ($MAJOR), skipping branch tag"
@@ -125,9 +184,8 @@ runs:
         {
           echo "### git-tag-builder"
           echo "- Target branch: $TARGET_BRANCH"
-          echo "- Exact tag: $EXACT_TAG"
           if [ -n "$BRANCH_TAG" ]; then
             echo "- Branch tag: $BRANCH_TAG"
           fi
-          echo "- Tags created: $TAGS_CREATED"
+          echo "- Git Tags: $TAGS_CREATED"
         } >> "$GITHUB_STEP_SUMMARY"

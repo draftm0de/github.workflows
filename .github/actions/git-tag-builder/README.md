@@ -4,11 +4,12 @@ Creates git tags based on version and target branch. Supports exact version tags
 
 ## Inputs
 
-| Name | Description | Required | Default |
-|------|-------------|----------|---------|
-| `version` | Version to tag (e.g., `v1.2.12`, `1.2.12`) | Yes | - |
-| `target-branch` | Target branch name (e.g., `main`, `v1.2`, `develop`) | Yes | - |
-| `enable-branch-tag` | Enable branch-level tagging when branch is version-like | No | `'true'` |
+| Name                | Description                                                                                                                                       | Required | Default   |
+|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------|
+| `version`           | Version to tag (e.g., `v1.2.12`, `1.2.12`)                                                                                                        | Yes      | -         |
+| `target-branch`     | Target branch name (e.g., `main`, `v1.2`, `develop`)                                                                                              | Yes      | -         |
+| `enable-branch-tag` | Enable branch-level tagging when branch is version-like                                                                                           | No       | `'true'`  |
+| `git-tag-levels`    | Comma-separated tag levels: `patch`, `minor`, `major` (e.g., `'patch,minor,major'`). Filters out levels already covered by version-like branches. | No       | `'patch'` |
 
 ## Outputs
 
@@ -28,7 +29,8 @@ Creates git tags based on version and target branch. Supports exact version tags
   uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
   with:
     version: v1.2.12
-    target-branch: v1.2
+    target-branch: main
+    git-tag-levels: 'patch,minor,major'
 
 - name: Push tags
   run: |
@@ -58,7 +60,7 @@ Creates git tags based on version and target branch. Supports exact version tags
     git push origin --tags
 ```
 
-### Disable Branch Tagging
+### Only Patch Tag (Default)
 
 ```yaml
 - name: Create git tags
@@ -66,19 +68,39 @@ Creates git tags based on version and target branch. Supports exact version tags
   with:
     version: v1.2.12
     target-branch: main
-    enable-branch-tag: 'false'
+    git-tag-levels: 'patch'
 ```
+
+### Multi-Level Tags with Version Branch
+
+```yaml
+- name: Create git tags
+  uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+  with:
+    version: v1.2.12
+    target-branch: v1.2
+    git-tag-levels: 'patch,minor,major'
+```
+Result: Creates `v1.2.12` and `v1.2` (branch tag). Major tag `v1` is skipped because `v1.2` branch already covers minor level.
 
 ## How It Works
 
-**Exact Tag:**
+**Exact Tag (Patch):**
 - Always creates a tag with the exact version (postfix stripped)
 - Example: Input `v1.2.12+build` → Creates tag `v1.2.12`
 
+**Multi-Level Tags (via `git-tag-levels`):**
+- `patch`: Exact version tag (e.g., `v1.2.12`) - always included
+- `minor`: Minor-level tag (e.g., `v1.2`)
+- `major`: Major-level tag (e.g., `v1`)
+
 **Branch Tag (when `enable-branch-tag: true`):**
 - Detects if branch name is version-like (`v1.2`, `1.2`, `v1`)
-- Creates/updates branch-level tag if version matches
-- Example: Branch `v1.2`, version `v1.2.12` → Creates tags `v1.2.12` and `v1.2`
+- Creates branch-level tag if version matches
+- Automatically filters out redundant multi-level tags
+- Example: Branch `v1.2`, version `v1.2.12`, levels `patch,minor,major`
+  - Creates: `v1.2.12`, `v1.2` (branch), `v1`
+  - Note: Minor tag from levels is skipped (covered by branch tag)
 
 **Branch Tag Matching:**
 - Branch `v1.2` + version `v1.2.12` → Creates `v1.2` tag ✅
@@ -91,18 +113,31 @@ Creates git tags based on version and target branch. Supports exact version tags
 
 ## Example Scenarios
 
-| Branch | Version | Exact Tag | Branch Tag | Notes |
-|--------|---------|-----------|------------|-------|
-| `v1.2` | `v1.2.12` | `v1.2.12` | `v1.2` | Both tags created |
-| `v1.2` | `v1.2.13` | `v1.2.13` | `v1.2` | Branch tag updated |
-| `v1.2` | `v2.0.0` | `v2.0.0` | - | Version doesn't match branch |
-| `main` | `v1.2.12` | `v1.2.12` | - | Branch not version-like |
-| `v1` | `v1.5.0` | `v1.5.0` | `v1` | Major-only branch |
+### With Default Settings (`git-tag-levels: 'patch'`)
+
+| Branch | Version | Tags Created | Notes |
+|--------|---------|--------------|-------|
+| `main` | `v1.2.12` | `v1.2.12` | Only patch tag |
+| `v1.2` | `v1.2.12` | `v1.2.12`, `v1.2` | Patch + branch tag |
+| `v1` | `v1.5.0` | `v1.5.0`, `v1` | Patch + branch tag |
+
+### With Multi-Level Tags (`git-tag-levels: 'patch,minor,major'`)
+
+| Branch | Version | Tags Created | Notes |
+|--------|---------|--------------|-------|
+| `main` | `v1.2.12` | `v1.2.12`, `v1.2`, `v1` | All three levels |
+| `v1.2` | `v1.2.12` | `v1.2.12`, `v1.2`, `v1` | Branch tag `v1.2` covers minor |
+| `v1` | `v1.5.0` | `v1.5.0`, `v1.5`, `v1` | Branch tag `v1` covers major |
+| `v1.2` | `v2.0.0` | `v2.0.0`, `v2.0`, `v2` | Version doesn't match branch |
 
 ## Notes
 
 - Postfixes (e.g., `+build-123`) are stripped before tagging
-- Branch tags are "floating" - they move to the latest patch for that branch
-- Exact tags are immutable - action will error if tag already exists
-- Use with `git push origin --tags` or push specific tags from outputs
+- Branch tags are "floating" - they move to the latest version for that branch
+- Multi-level tags (minor/major) are also "floating" - they move to the latest patch/minor
+- Patch tags (exact versions) are immutable - action will error if tag already exists
+- Version-like branches automatically filter out redundant multi-level tags
+- Action only calculates tags, does not create them (no git operations)
+- Use with `git tag` + `git push` or let your workflow handle tag creation
+- Invalid tag levels will cause action to fail with exit code 1
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details
