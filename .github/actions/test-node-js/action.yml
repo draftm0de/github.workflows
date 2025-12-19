@@ -1,0 +1,197 @@
+name: node-js-test
+description: node-js-test
+
+# Composite action that enforces formatting/lint/test quality gates for Node.js
+# packages. It installs dependencies, runs Prettier, lint, badges, and test
+# scripts so consuming repos can mirror the CI workflow locally.
+
+inputs:
+  node-version:
+    description: "Node.js version to install via actions/setup-node"
+    required: false
+    default: ''
+  node-version-env:
+    description: "Path to an env file that exports NODE_VERSION (file is sourced with set -a)"
+    required: false
+    default: ''
+  enable-cache:
+    description: "Enable npm dependency caching (requires package-lock.json)"
+    required: false
+    default: 'true'
+  lint-script:
+    description: "npm script responsible for linting"
+    required: false
+    default: ''
+  test-script:
+    description: "npm script that executes the test suite"
+    required: false
+    default: ''
+  prettier-script:
+    description: "npm script that runs Prettier in check mode"
+    required: false
+    default: ''
+  badges-script:
+    description: "Optional npm script that refreshes README/coverage badges"
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Config Test
+      shell: bash
+      id: config
+      run: |
+        set -euo pipefail
+
+        ENV_FILE="${{ inputs.node-version-env }}"
+        INPUT_NODE_VERSION="${{ inputs.node-version }}"
+        
+        # Defaults
+        source_label="inputs.node-version"
+        NODE_VERSION="$INPUT_NODE_VERSION"        
+
+        if [ -n "$ENV_FILE" ]; then
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "::error::node-version-env ($ENV_FILE) is set but file not found."
+            exit 1
+          fi
+
+          set -a
+          # shellcheck disable=SC1090
+          source "$ENV_FILE"
+          set +a
+
+          if [ -z "${NODE_VERSION:-}" ]; then
+            echo "::error::node-version-env ($ENV_FILE) does not set NODE_VERSION=..."
+            exit 1
+          fi
+          source_label="$ENV_FILE"
+          echo "::notice::NODE_VERSION sourced from $ENV_FILE"
+        else
+          if [ -z "${NODE_VERSION:-}" ]; then
+            echo "::error::node-version not provided as inputs.node-version"
+            exit 1
+          fi
+          echo "::notice::NODE_VERSION used from inputs.node-version"
+        fi
+
+        echo "::notice::use node-version: $NODE_VERSION"
+        {
+          echo "version=$NODE_VERSION"
+          echo "source=$source_label"
+        } >> "$GITHUB_OUTPUT"
+        echo "- [x] NODE_VERSION=$NODE_VERSION (from $source_label)" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ steps.config.outputs.version }}
+        cache: ${{ inputs.enable-cache == 'true' && 'npm' || '' }}
+        cache-dependency-path: ${{ inputs.enable-cache == 'true' && '**/package-lock.json' || '' }}
+      # Installs the requested Node version and optionally caches npm dependencies.
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ ! -f package.json ]; then
+          echo "::error::package.json not found in repository root."
+          exit 1
+        fi
+
+        if [ ! -f package-lock.json ]; then
+          echo "::error::package-lock.json not found. Please commit package-lock.json for reproducible builds."
+          echo "Run 'npm install' locally and commit the generated package-lock.json file."
+          exit 1
+        fi
+
+        echo "Using npm ci for reproducible installation."
+        npm ci
+        echo "- [x] npm ci" >> "$GITHUB_STEP_SUMMARY"
+      # Enforces package-lock.json for reproducible installs.
+
+    - name: Run lint script
+      shell: bash
+      run: |
+        set -euo pipefail
+        SCRIPT="${{ inputs.lint-script }}"
+
+        if [ -z "$SCRIPT" ]; then
+          echo "::notice::Lint script input empty → skipping lint step."
+          echo "- [ ] npm run (lint skipped)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, '$SCRIPT') ? 0 : 1);"; then
+          npm run "$SCRIPT"
+          echo "- [x] npm run $SCRIPT" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::error::package.json is missing an npm script named '$SCRIPT'. Override lint-script or leave it empty to skip."
+          exit 1
+        fi
+      # Enforces lint parity via the configured npm script.
+
+    - name: Run prettier script
+      shell: bash
+      run: |
+        set -euo pipefail
+        SCRIPT="${{ inputs.prettier-script }}"
+
+        if [ -z "$SCRIPT" ]; then
+          echo "::notice::Prettier script input empty → skipping formatting check."
+          echo "- [ ] npm run (prettier skipped)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, '$SCRIPT') ? 0 : 1);"; then
+          npm run "$SCRIPT"
+          echo "- [x] npm run $SCRIPT" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::error::package.json is missing an npm script named '$SCRIPT'. Override prettier-script or leave it empty to skip."
+          exit 1
+        fi
+      # Verifies Prettier formatting stays consistent.
+
+    - name: Refresh badges
+      shell: bash
+      run: |
+        set -euo pipefail
+        SCRIPT="${{ inputs.badges-script }}"
+
+        if [ -z "$SCRIPT" ]; then
+          echo "::notice::Badge script input empty → skipping badge refresh."
+          echo "- [ ] npm run (badges skipped)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, '$SCRIPT') ? 0 : 1);"; then
+          npm run "$SCRIPT"
+          echo "- [x] npm run $SCRIPT" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::error::package.json is missing an npm script named '$SCRIPT'. Override badges-script or leave it empty to skip."
+          exit 1
+        fi
+      # Keeps README/coverage badges updated via a repo-defined script.
+
+    - name: Run tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        SCRIPT="${{ inputs.test-script }}"
+
+        if [ -z "$SCRIPT" ]; then
+          echo "::notice::Test script input empty → skipping tests."
+          echo "- [ ] npm run (tests skipped)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, '$SCRIPT') ? 0 : 1);"; then
+          npm run "$SCRIPT"
+          echo "- [x] npm run $SCRIPT" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::error::package.json is missing an npm script named '$SCRIPT'. Override test-script or leave it empty to skip."
+          exit 1
+        fi
+      # Executes the configured npm test script.
