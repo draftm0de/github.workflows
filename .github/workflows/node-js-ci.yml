@@ -233,7 +233,7 @@ jobs:
           image: ${{ steps.build.outputs.image }}
 
   # general job to create and push git tags (only on push to release branch)
-  git_tag_push:
+  git_push:
     name: Push Git Tags
     if: |
       github.event_name == 'push' &&

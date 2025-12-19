@@ -10,7 +10,7 @@ Composite action that builds a Docker image (optionally using Buildx for reprodu
 ## Inputs
 | Name              | Description                                                                                | Required | Default   |
 |-------------------|--------------------------------------------------------------------------------------------|----------|-----------|
-| `image`           | Full image reference (falls back to `:latest` when no tag provided).                       | Yes      | —         |
+| `image`           | Full image reference (defaults to short git SHA when no tag provided, e.g., `:abc1234`).  | Yes      | —         |
 | `target`          | Multi-stage `--target` name.                                                               | No       | —         |
 | `context`         | Build context directory.                                                                   | No       | `.`       |
 | `options`         | Extra CLI flags appended verbatim (for example `--no-cache`).                              | No       | —         |
@@ -21,7 +21,7 @@ Composite action that builds a Docker image (optionally using Buildx for reprodu
 | Name     | Description                                                                               |
 |----------|-------------------------------------------------------------------------------------------|
 | `digest` | Docker image digest produced by the build.                                                |
-| `image`  | Fully-qualified tag (with automatic `:latest` default) that was passed to `docker build`. |
+| `image`  | Fully-qualified tag (with automatic short SHA default) that was passed to `docker build`. |
 
 ## Usage
 ```yaml

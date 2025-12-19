@@ -69,7 +69,8 @@ runs:
           image_tag="${image#*:}"
         else
           image_name="$image"
-          image_tag="latest"
+          image_tag="${{ github.sha }}"
+          image_tag="${image_tag:0:7}"
         fi
 
         tag="$image_name:$image_tag"

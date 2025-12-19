@@ -42,11 +42,17 @@ Check that required inputs are provided and image exists locally:
   - Log notice: "Using provided username: {username}"
   - Image name remains unchanged
 
+**Tag stripping:**
+- Check if `IMAGE` contains `:` character
+- If yes: Strip everything after `:` (e.g., `myimage:abc1234` → `myimage`)
+- Log notice: "Stripped tag from image name: {image}"
+- This ensures clean tag construction regardless of docker-build's default SHA tag
+
 Exit with error if any validation fails.
 
 Log notices for validated image and tags.
 
-Output `username` and `image` (possibly stripped) to `$GITHUB_OUTPUT`.
+Output `username` and `image` (stripped of username/tag) to `$GITHUB_OUTPUT`.
 
 ### 2. Login to Registry
 
@@ -62,8 +68,8 @@ Action handles authentication and token storage.
 Iterate over space-separated tags and push each one.
 
 **Variables:**
-- `SOURCE_IMAGE`: Original image input (e.g., `myuser/myimage`)
-- `IMAGE`: Processed image name from validation step (e.g., `myimage` if username was stripped)
+- `SOURCE_IMAGE`: Original image input (e.g., `myuser/myimage:abc1234`)
+- `IMAGE`: Processed image name from validation step (e.g., `myimage` - username and tag stripped)
 - `USERNAME`: Username from validation step
 - `REGISTRY`: Registry input
 
@@ -77,28 +83,29 @@ Iterate over space-separated tags and push each one.
 
 **Example iteration:**
 ```
-Input image: "myuser/myapp"
+Input image: "myuser/myapp:abc1234" (from docker-build with SHA tag)
 Extracted username: "myuser"
-Processed image: "myapp"
+Stripped to: "myapp:abc1234"
+Tag stripped to: "myapp"
 Input tags: "v1.2.12 v1.2 latest"
 Registry: "ghcr.io"
 
 Iteration 1:
   Tag: "v1.2.12"
   Full tag: "ghcr.io/myuser/myapp:v1.2.12"
-  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:v1.2.12
+  Command: docker tag myuser/myapp:abc1234 ghcr.io/myuser/myapp:v1.2.12
   Command: docker push ghcr.io/myuser/myapp:v1.2.12
 
 Iteration 2:
   Tag: "v1.2"
   Full tag: "ghcr.io/myuser/myapp:v1.2"
-  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:v1.2
+  Command: docker tag myuser/myapp:abc1234 ghcr.io/myuser/myapp:v1.2
   Command: docker push ghcr.io/myuser/myapp:v1.2
 
 Iteration 3:
   Tag: "latest"
   Full tag: "ghcr.io/myuser/myapp:latest"
-  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:latest
+  Command: docker tag myuser/myapp:abc1234 ghcr.io/myuser/myapp:latest
   Command: docker push ghcr.io/myuser/myapp:latest
 ```
 

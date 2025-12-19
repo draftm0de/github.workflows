@@ -90,7 +90,7 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 The reusable workflow declares these permissions as its requirements:
 ```yaml
 permissions:
-  contents: write    # Required for git_tag_push job
+  contents: write    # Required for git_push job
   pull-requests: read  # Required for git-state action
   packages: write      # Required for docker_push job
 ```
@@ -259,7 +259,7 @@ This means:
 - `draftm0de/github.workflows/.github/actions/docker-build@main`
 - `draftm0de/github.workflows/.github/actions/artifact-from-image@main`
 
-### 5. git_tag_push
+### 5. git_push
 
 **Purpose**: Creates and pushes git tags to remote repository (release branches only).
 
@@ -496,7 +496,7 @@ This workflow uses the following actions from the same repository:
 - ✅ `tests` - Test execution with PR guard and merge queue support
 - ✅ `auto_tagging` - Version calculation and tag generation
 - ✅ `docker_build` - Docker image builds (PRs, merge queue, and pushes)
-- ✅ `git_tag_push` - Git tag creation and push to remote (release branches only)
+- ✅ `git_push` - Git tag creation and push to remote (release branches only)
 - ✅ `docker_push` - Docker image pushes to registry (release branches only)
 
 ## Notes

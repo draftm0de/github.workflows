@@ -76,11 +76,12 @@ jobs:
 
 1. **Validation**: Checks that required inputs (`image`, `tags`, `password`) are provided and image exists locally
 2. **Username inference**: If `username` not provided, extracts from image name (e.g., `myuser/myimage` → username: `myuser`, image: `myimage`). The image name is stripped of the username prefix.
-3. **Registry login**: Uses `docker/login-action@v3` with provided credentials
-4. **Tag and push**: For each tag in space-separated list:
+3. **Tag stripping**: Any existing tag is stripped from the image name (e.g., `myimage:abc1234` → `myimage`) to ensure clean tag construction
+4. **Registry login**: Uses `docker/login-action@v3` with provided credentials
+5. **Tag and push**: For each tag in space-separated list:
    - Tag local image with `<registry>/<username>/<image>:<tag>` (or `<username>/<image>:<tag>` for Docker Hub)
    - Push tagged image to registry
-5. **Summary**: Writes list of all pushed tags to workflow step summary
+6. **Summary**: Writes list of all pushed tags to workflow step summary
 
 ## Registry Notes
 
@@ -112,6 +113,7 @@ Tags pushed:
 - Registry prefix is automatically added to each tag
 - Username inference extracts from image name format `username/image`
 - If username extracted, image name is stripped to just the image part
+- Any existing tag (e.g., `:abc1234` from docker-build) is automatically stripped before applying new tags
 - Final tag format: `<registry>/<username>/<image>:<tag>` or `<username>/<image>:<tag>` without registry
 - Action fails if image doesn't exist locally or if any push fails
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details
