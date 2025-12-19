@@ -90,8 +90,9 @@ on:
         type: string
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: write    # Required for git_tag_push job
+  pull-requests: read  # Required for git-state action
+  packages: write      # Required for docker_push job
 
 jobs:
   # general job to set up some workflow properties
@@ -206,6 +207,7 @@ jobs:
       - tests
     outputs:
       image: ${{ steps.build.outputs.image }}
+      artifact: ${{ steps.upload.outputs.artifact }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -220,7 +222,7 @@ jobs:
           options: ${{ inputs.docker-build-options }}
           reproducible: ${{ inputs.docker-build-reproducible }}
 
-      - name: Upload docker image
+      - name: Upload docker image to artifact
         id: upload
         uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
         with:
@@ -266,10 +268,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Load docker image from artifact
+        id: download
+        uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+        with:
+          artifact: ${{ needs.docker_build.outputs.artifact }}
+
       - name: Push docker image to registry
         uses: draftm0de/github.workflows/.github/actions/docker-push@main
         with:
-          image: ${{ needs.docker_build.outputs.image }}
+          image: ${{ steps.download.outputs.image }}
           tags: ${{ needs.auto_tagging.outputs.docker-tags }}
           registry: ${{ inputs.docker-registry }}
           username: ${{ inputs.docker-registry-username || github.actor }}

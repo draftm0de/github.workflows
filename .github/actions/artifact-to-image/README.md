@@ -4,8 +4,9 @@ This GitHub Action enables loading a previously saved Docker image from an artif
 
 ## Features
 
-- Downloads a Docker image artifact from GitHub Actions storage.
-- Loads the image into Docker, making it available for use.
+- Downloads a Docker image artifact from GitHub Actions storage
+- Loads the image into Docker, making it available for use
+- Outputs the loaded image reference for subsequent steps
 
 ## Inputs
 
@@ -28,15 +29,107 @@ This GitHub Action enables loading a previously saved Docker image from an artif
 
 ## Usage
 
-Below is an example of how to use this action in your workflow:
+### Basic Example
 
 ```yaml
 jobs:
-  load-docker-image:
+  push:
     runs-on: ubuntu-latest
     steps:
-      - name: Load Docker Image
+      - name: Load Docker image from artifact
+        id: download
         uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
         with:
-          artifact: myartifact/image.tar
+          artifact: myrepo-myimage-1-0/image.tar
+
+      - name: Use loaded image
+        run: docker images ${{ steps.download.outputs.image }}
 ```
+
+### With artifact-from-image
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact }}
+    steps:
+      - name: Build image
+        run: docker build -t myrepo/myimage:1.0 .
+
+      - name: Upload to artifact
+        id: upload
+        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
+        with:
+          image: myrepo/myimage:1.0
+
+  push:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download from artifact
+        id: download
+        uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+        with:
+          artifact: ${{ needs.build.outputs.artifact }}
+
+      - name: Push to registry
+        uses: draftm0de/github.workflows/.github/actions/docker-push@main
+        with:
+          image: ${{ steps.download.outputs.image }}
+          tags: v1.0.0 latest
+          registry: ghcr.io
+          password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### In node-js-ci Workflow
+
+```yaml
+jobs:
+  docker_build:
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact }}
+    steps:
+      - name: Build
+        id: build
+        uses: draftm0de/github.workflows/.github/actions/docker-build@main
+        with:
+          image: ghcr.io/org/app
+
+      - name: Upload
+        id: upload
+        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
+        with:
+          image: ${{ steps.build.outputs.image }}
+
+  docker_push:
+    needs: docker_build
+    steps:
+      - name: Download
+        id: download
+        uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+        with:
+          artifact: ${{ needs.docker_build.outputs.artifact }}
+
+      - name: Push
+        uses: draftm0de/github.workflows/.github/actions/docker-push@main
+        with:
+          image: ${{ steps.download.outputs.image }}
+          tags: v1.2.3 latest
+```
+
+## Input Format
+
+The `artifact` input must be in `name/path` format:
+- `name`: The artifact name (as uploaded by `actions/upload-artifact`)
+- `path`: The file path within the artifact (typically `image.tar`)
+
+Example: `myrepo-myimage-1-0/image.tar`
+
+## Notes
+
+- The artifact must have been uploaded in a previous job using `artifact-from-image` or `actions/upload-artifact`
+- The action extracts the image reference from `docker load` output
+- The action writes a summary to `$GITHUB_STEP_SUMMARY` showing the artifact and loaded image
+- Artifacts are automatically cleaned up after workflow completion (configurable in GitHub settings)

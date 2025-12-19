@@ -63,10 +63,10 @@ runs:
     - name: Summary
       shell: bash
       run: |
-        name=${{ steps.prepare.outputs.artifact_name }}
-        path=${{ steps.prepare.outputs.artifact_path }}
+        artifact="${{ steps.prepare.outputs.artifact_name }}/${{ steps.prepare.outputs.artifact_path }}"
+        image="${{ inputs.image }}"
         {
           echo "### artifact-from-image"
-          echo "- artifact name: $name"
-          echo "- artifact path: $path"
+          echo "- Image: \`$image\`"
+          echo "- Artifact: \`$artifact\`"
         } >> "$GITHUB_STEP_SUMMARY"             

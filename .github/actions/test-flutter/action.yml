@@ -1,0 +1,78 @@
+name: flutter-test
+description: flutter-test
+
+inputs:
+  pub-cache-key:
+    description: >-
+      Optional cache key for pub dependencies. Defaults to combining the runner
+      OS with the hashes of any pubspec.lock/pubspec.yaml files.
+    required: false
+    default: ''
+
+# Composite action that mirrors the full CI gate: setup Flutter, enforce
+# formatting/analyzer cleanliness, ensure localization is checked in, and run tests.
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      # Ensure tests run against the workflow caller's revision.
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        flutter-version-file: pubspec.yaml
+        cache: true
+      # Download Flutter SDK matching the repo's desired version.
+
+    - name: Cache pub packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.pub-cache
+          **/.dart_tool
+        key: ${{ inputs.pub-cache-key != '' && inputs.pub-cache-key || format('{0}-pub-{1}', runner.os, hashFiles('**/pubspec.lock', '**/pubspec.yaml')) }}
+        restore-keys: |
+          ${{ format('{0}-pub-', runner.os) }}
+      # Warms the pub cache so repeated workflow runs stay fast.
+
+    - name: Flutter pub get
+      run: flutter pub get
+      shell: bash
+      # Install package dependencies before formatting/testing.
+
+    - name: Generate localizations and verify they are commited
+      run: |
+        if [ -f "l10n.yaml" ]; then
+          flutter gen-l10n
+
+          if ! git diff --quiet; then
+            echo "::error::Localization files are not committed or outdated!"
+            echo "Run 'flutter gen-l10n' locally and commit the generated files."
+            git diff
+            exit 1
+          else 
+            echo "✔ Localization files are up to date."
+          fi
+        else
+          echo "::notice::No l10n.yaml found → skipping localization verification"
+        fi        
+      shell: bash
+      # Prevents drift between generated localization artifacts and source.
+
+    - name: Enforce formatting
+      run: dart format --output=none --set-exit-if-changed .
+      shell: bash
+      # Fails if any Dart file is not formatted.
+
+    - name: Analyze
+      run: dart analyze .
+      shell: bash
+      # Static analysis gate.
+
+    - name: Run tests
+      run: flutter test
+      shell: bash
+      # Executes suite; bubbles up exit code for CI.

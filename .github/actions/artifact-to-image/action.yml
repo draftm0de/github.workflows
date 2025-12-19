@@ -60,3 +60,14 @@ runs:
 
         echo "::endgroup::"
         echo "image=$image" >> "$GITHUB_OUTPUT"
+
+    - name: Summary
+      shell: bash
+      run: |
+        artifact="${{ inputs.artifact }}"
+        image="${{ steps.load.outputs.image }}"
+        {
+          echo "### artifact-to-image"
+          echo "- Artifact: \`$artifact\`"
+          echo "- Loaded image: \`$image\`"
+        } >> "$GITHUB_STEP_SUMMARY"

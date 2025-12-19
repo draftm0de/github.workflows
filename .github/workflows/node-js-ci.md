@@ -85,20 +85,50 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 
 ## Permissions
 
-The workflow requires:
+The reusable workflow declares these permissions as its requirements:
 ```yaml
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write    # Required for git_tag_push job
+  pull-requests: read  # Required for git-state action
+  packages: write      # Required for docker_push job
 ```
 
-Consuming repositories should use `secrets: inherit` to pass `GITHUB_TOKEN` and any registry credentials:
+**Important:** When calling this workflow with `workflow_call`, the **caller's permissions override** these defaults. You must explicitly grant permissions in the calling workflow:
 
 ```yaml
+# .github/workflows/ci.yml (caller)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write      # Required for git tags
+  pull-requests: read  # Required for PR detection
+  packages: write      # Required for Docker push
+
 jobs:
   node:
     uses: draftm0de/github.workflows/.github/workflows/node-js-ci.yml@main
     secrets: inherit
+    with:
+      node-version: '20'
+      ci-tag-source: 'nodejs'
+      docker-image-name: 'ghcr.io/org/app'
+```
+
+**Permission requirements by feature:**
+- **All workflows**: `pull-requests: read` (for PR detection in git-state)
+- **Git tagging** (`ci-tag-source` set): `contents: write`
+- **Docker push** (`docker-image-name` set): `packages: write`
+
+**Note:** If you only use testing features (no tagging/docker), you can use:
+```yaml
+permissions:
+  pull-requests: read
 ```
 
 ## Jobs
@@ -177,8 +207,8 @@ This means:
 1. Checkout repository with full history (`fetch-depth: 0`)
 2. Read current version using `version-reader` action
 3. Build next version using `tag-builder` action
-4. Create docker tags (if `docker-image-name` provided) using `docker-tag-builder` action
-5. Create git tags using `git-tag-builder` action
+4. Create docker tags (if `docker-tag-levels` provided) using `docker-tag-builder` action
+5. Create git tags (if `git-tag-levels` provided) using `git-tag-builder` action
 
 **Outputs**:
 - `next-version`: Next version with postfix (e.g., `v1.2.12+build`)
@@ -227,7 +257,34 @@ This means:
 - `draftm0de/github.workflows/.github/actions/docker-build@main`
 - `draftm0de/github.workflows/.github/actions/artifact-from-image@main`
 
-### 5. docker_push
+### 5. git_tag_push
+
+**Purpose**: Creates and pushes git tags to remote repository (release branches only).
+
+**Runs on**: `ubuntu-latest`
+
+**Depends on**: `setup`, `auto_tagging`, `tests`
+
+**Runs when**:
+```yaml
+github.event_name == 'push' AND
+is-release-branch == 'true' AND
+git-tags != ''
+```
+
+This means:
+- Only runs on `push` events to release branches (e.g., `main`, `release/*`)
+- Only when git tags were calculated by auto_tagging job
+- Only after tests pass
+
+**Steps**:
+1. Checkout repository with full history (`fetch-depth: 0`)
+2. Push git tags to remote using `git-push` action
+
+**Uses actions**:
+- `draftm0de/github.workflows/.github/actions/git-push@main`
+
+### 6. docker_push
 
 **Purpose**: Pushes Docker image to registry (release branches only).
 
@@ -237,16 +294,17 @@ This means:
 
 **Runs when**:
 ```yaml
-docker-image-name != '' AND
-ci-tag-source != '' AND
 github.event_name == 'push' AND
-is-release-branch == 'true'
+is-release-branch == 'true' AND
+docker-image-name != '' AND
+docker-tags != ''
 ```
 
 This means:
-- Only runs when both Docker and tagging are configured
 - Only runs on `push` events to release branches (e.g., `main`, `release/*`)
-- Only after docker_build and auto_tagging complete
+- Only when Docker image name is configured
+- Only when docker tags were calculated by auto_tagging job
+- Only after docker_build completes
 
 **Steps**:
 1. Checkout repository
@@ -417,6 +475,7 @@ This workflow uses the following actions from the same repository:
 - `git-tag-builder` - Creates git tags
 - `docker-build` - Builds Docker images
 - `docker-push` - Pushes Docker images to registry
+- `git-push` - Pushes git tags to remote repository
 - `artifact-from-image` - Uploads Docker images as artifacts
 
 ## Workflow State
@@ -428,6 +487,7 @@ This workflow uses the following actions from the same repository:
 - ✅ `tests` - Test execution with PR guard and merge queue support
 - ✅ `auto_tagging` - Version calculation and tag generation
 - ✅ `docker_build` - Docker image builds (PRs, merge queue, and pushes)
+- ✅ `git_tag_push` - Git tag creation and push to remote (release branches only)
 - ✅ `docker_push` - Docker image pushes to registry (release branches only)
 
 ## Notes
@@ -436,9 +496,12 @@ This workflow uses the following actions from the same repository:
 - All test scripts are optional - skip by leaving blank
 - Docker jobs are opt-in via `docker-image-name` input
 - Tagging jobs are opt-in via `ci-tag-source` input
-- Docker push requires both `docker-image-name` AND `ci-tag-source` to be configured
+- Docker tag calculation is conditional on `docker-tag-levels` input
+- Git tag calculation is conditional on `git-tag-levels` input
+- Git tags are pushed only when `git-tags` output is non-empty
+- Docker push requires `docker-image-name` AND non-empty `docker-tags` output
 - The PR guard prevents wasteful duplicate runs on the same branch
 - Supports GitHub merge queue (`merge_group` events)
 - Full git history (`fetch-depth: 0`) is required for version comparison in tagging jobs
 - The workflow uses composite actions, making it easy to test and maintain individual components
-- Docker images are pushed only on `push` events to release branches (configured via `ci-release-branch-patterns`)
+- Git tags and Docker images are pushed only on `push` events to release branches (configured via `ci-release-branch-patterns`)
