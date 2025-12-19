@@ -65,6 +65,6 @@ jobs:
 
       - name: Run formatter/analyzer/tests
         # Composite action orchestrates Flutter setup and quality gates.
-        uses: draftm0de/github.workflows/.github/actions/flutter-test@main
+        uses: draftm0de/github.workflows/.github/actions/test-flutter@main
         with:
           pub-cache-key: ${{ github.event.inputs.pub-cache-key || '' }}

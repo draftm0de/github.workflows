@@ -147,9 +147,9 @@ This means:
 
 **Steps**:
 1. Checkout repository
-2. Calls `node-js-test` action with all test/lint/format script inputs
+2. Calls `test-node-js` action with all test/lint/format script inputs
 
-**Uses action**: `draftm0de/github.workflows/.github/actions/node-js-test@main`
+**Uses action**: `draftm0de/github.workflows/.github/actions/test-node-js@main`
 
 ### 3. auto_tagging
 
@@ -410,7 +410,7 @@ jobs:
 
 This workflow uses the following actions from the same repository:
 - `git-state` - Detects PR state and branch information
-- `node-js-test` - Runs Node.js tests and quality checks
+- `test-node-js` - Runs Node.js tests and quality checks
 - `version-reader` - Reads versions from package.json, pubspec.yaml, or git tags
 - `tag-builder` - Builds and validates semantic version tags
 - `docker-tag-builder` - Creates Docker image tags

@@ -9,7 +9,7 @@ This workflow guards DraftMode Flutter packages by enforcing formatting, analyze
 
 ## Job Overview
 1. **verify-version-tag** — Checks out the repo with full history and runs the `flutter-auto-tagging` action to ensure the current `pubspec.yaml` version doesn’t lag behind existing git tags.
-2. **tests** — Repeats the checkout, re-reads pubspec metadata for downstream consumers, then executes the `flutter-test` composite action to set up Flutter, enforce formatting/analyzer consistency, and run `flutter test`.
+2. **tests** — Repeats the checkout, re-reads pubspec metadata for downstream consumers, then executes the `test-flutter` composite action to set up Flutter, enforce formatting/analyzer consistency, and run `flutter test`.
 
 ## How to Use
 Reference the workflow from another repository via `workflow_call` so you stay on the latest automation, or copy it verbatim if you need further tweaks.
@@ -31,7 +31,7 @@ jobs:
 The `secrets: inherit` line lets the called workflow use the same repository secrets (e.g., for private pub servers). Override behavior by forking this repo or pinning to a specific ref if you require deterministic behavior over time.
 
 ### Inputs
-- `pub-cache-key` *(string, optional)* — forwarded to the `flutter-test` action to influence how `~/.pub-cache`/`.dart_tool` are cached. Provide the same expression you’d pass directly to the composite action so package downloads stay scoped to the signals you care about. When omitted (or when the workflow runs on pull requests), the action falls back to hashing any `pubspec.lock`/`pubspec.yaml` files it finds.
+- `pub-cache-key` *(string, optional)* — forwarded to the `test-flutter` action to influence how `~/.pub-cache`/`.dart_tool` are cached. Provide the same expression you'd pass directly to the composite action so package downloads stay scoped to the signals you care about. When omitted (or when the workflow runs on pull requests), the action falls back to hashing any `pubspec.lock`/`pubspec.yaml` files it finds.
   - For manual `workflow_dispatch` runs, the new input shows up as a textbox so you can test different caching strategies without editing YAML.
 
 ## Local Parity

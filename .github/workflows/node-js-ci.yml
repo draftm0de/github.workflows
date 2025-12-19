@@ -180,7 +180,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run node js tests
-        uses: draftm0de/github.workflows/.github/actions/node-js-test@main
+        uses: draftm0de/github.workflows/.github/actions/test-node-js@main
         with:
           node-version: ${{ inputs.node-version }}
           node-version-env: ${{ inputs.node-version-env }}
