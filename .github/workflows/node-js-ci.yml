@@ -20,6 +20,10 @@ on:
         description: "npm script to run linting (leave blank to skip)"
         required: false
         type: string
+      test-script:
+        description: "npm script to run test suite (leave blank to skip)"
+        required: false
+        type: string
       prettier-script:
         description: "npm script to run Prettier in check mode (leave blank to skip)"
         required: false
@@ -28,15 +32,16 @@ on:
         description: "npm script to refresh README/coverage badges (leave blank to skip)"
         required: false
         type: string
-      test-script:
-        description: "npm script to run test suite (leave blank to skip)"
+      ci-release-branch-patterns:
+        description: "Comma-separated branch patterns to identify release branches (e.g., 'main,release/*')"
         required: false
         type: string
-      tag-source:
+        default: "main"
+      ci-tag-source:
         description: "Version source type: nodejs, flutter, or target (leave blank to skip tagging)"
         required: false
         type: string
-      tag-increment-patch:
+      ci-tag-increment-patch:
         description: "Auto-increment patch version when major.minor match latest tag"
         required: false
         type: boolean
@@ -69,24 +74,90 @@ on:
         required: false
         type: string
         default: "patch,latest"
+      docker-registry:
+        description: "Docker registry URL (e.g., 'ghcr.io', leave blank for Docker Hub)"
+        required: false
+        type: string
+        default: "ghcr.io"
+      docker-registry-username:
+        description: "Docker registry username (leave blank to use github.actor)"
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: read
 
 jobs:
-  # general and required job
+  # general job to set up some workflow properties
   setup:
     name: Workflow Setup
     runs-on: ubuntu-latest
     outputs:
-      is-pull-request: ${{ steps.state.outputs.is-pull-request }}
-      ci-open-pull-request: ${{ steps.state.outputs.ci-open-pull-request }}
+      has-open-pull-requests: ${{ steps.state.outputs.has-open-pull-requests }}
       source-branch-name: ${{ steps.state.outputs.source-branch-name }}
       target-branch-name: ${{ steps.state.outputs.target-branch-name }}
+      is-release-branch: ${{ steps.state.outputs.is-release-branch }}
     steps:
       - uses: draftm0de/github.workflows/.github/actions/git-state@main
         id: state
+        with:
+          ci-release-branch-patterns: ${{ inputs.ci-release-branch-patterns }}
+
+  # general job in case of ci-tag-source (auto-tagging)
+  auto_tagging:
+    name: Tag Calculation
+    if: |
+      inputs.ci-tag-source != '' && (
+        github.event_name == 'pull_request' ||
+        github.event_name == 'merge_group' ||
+        (github.event_name == 'push' && needs.setup.outputs.has-open-pull-requests == 'false')
+      )
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    outputs:
+      next-version: ${{ steps.version.outputs.next-version }}
+      next-version-short: ${{ steps.version.outputs.next-version-short }}
+      is-latest-version: ${{ steps.version.outputs.is-latest-version }}
+      docker-tags: ${{ steps.docker-tags.outputs.docker-tags || '' }}
+      git-tags: ${{ steps.git-tags.outputs.git-tags || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read current version
+        id: current-version
+        uses: draftm0de/github.workflows/.github/actions/version-reader@main
+        with:
+          type: ${{ inputs.ci-tag-source }}
+          target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
+
+      - name: Build next version
+        id: version
+        uses: draftm0de/github.workflows/.github/actions/tag-builder@main
+        with:
+          target-branch: ${{ needs.setup.outputs.target-branch-name }}
+          current-version: ${{ steps.current-version.outputs.version }}
+          patch: ${{ inputs.ci-tag-increment-patch }}
+
+      - name: Create docker tags
+        id: docker-tags
+        if: inputs.docker-image-name != ''
+        uses: draftm0de/github.workflows/.github/actions/docker-tag-builder@main
+        with:
+          version: ${{ steps.version.outputs.next-version-short }}
+          is-latest-version: ${{ steps.version.outputs.is-latest-version }}
+          tag-levels: ${{ inputs.docker-tag-levels }}
+
+      - name: Create git tags
+        id: git-tags
+        uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+        with:
+          version: ${{ steps.version.outputs.next-version-short }}
+          target-branch: ${{ needs.setup.outputs.target-branch-name }}
 
   # node-js specific part about testing
   tests:
@@ -94,8 +165,9 @@ jobs:
     needs:
       - setup
     if: |
-      needs.setup.outputs.is-pull-request == 'true' || 
-      needs.setup.outputs.ci-open-pull-request == 'false'
+      github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'push' && needs.setup.outputs.has-open-pull-requests == 'false')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -112,16 +184,21 @@ jobs:
           badges-script: ${{ inputs.badges-script }}
           test-script: ${{ inputs.test-script }}
 
-  # general job to build a docker image (node-js independent)
-  build_on_pull:
-    name: Build (pull request)
+  # general job in case of docker-image-name (build docker image)
+  docker_build:
+    name: Build Docker Image
     if: |
-      needs.setup.outputs.is-pull-request == 'true' && 
-      inputs.docker-image-name != ''
+      inputs.docker-image-name != '' && (
+        github.event_name == 'pull_request' ||
+        github.event_name == 'merge_group' ||
+        (github.event_name == 'push' && needs.setup.outputs.has-open-pull-requests == 'false')
+      )
     runs-on: ubuntu-latest
     needs:
       - setup
       - tests
+    outputs:
+      image: ${{ steps.build.outputs.image }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -136,39 +213,34 @@ jobs:
           options: ${{ inputs.docker-build-options }}
           reproducible: ${{ inputs.docker-build-reproducible }}
 
-      - name: Upload Docker image
+      - name: Upload docker image
         id: upload
         uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
         with:
           image: ${{ steps.build.outputs.image }}
 
-  # general job to calculate next tags and verify them (node-js independent)
-  tag_on_pull:
-    name: Tag calculation (pull request)
+  # general job to push docker image to registry (only on push to release branch)
+  docker_push:
+    name: Push Docker Image
     if: |
-      needs.setup.outputs.is-pull-request == 'true' &&
-      inputs.tag-source != ''
+      inputs.docker-image-name != '' &&
+      inputs.ci-tag-source != '' &&
+      github.event_name == 'push' &&
+      needs.setup.outputs.is-release-branch == 'true'
+    runs-on: ubuntu-latest
     needs:
       - setup
-      - tests
-    runs-on: ubuntu-latest
+      - auto_tagging
+      - docker_build
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Read current version
-        id: current-version
-        uses: draftm0de/github.workflows/.github/actions/version-reader@main
+      - name: Push docker image to registry
+        uses: draftm0de/github.workflows/.github/actions/docker-push@main
         with:
-          type: ${{ inputs.tag-source }}
-          target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
-
-      - name: Build next version
-        id: tags
-        uses: draftm0de/github.workflows/.github/actions/tag-builder@main
-        with:
-          target-branch: ${{ needs.setup.outputs.target-branch-name }}
-          current-version: ${{ steps.current-version.outputs.version }}
-          patch: ${{ inputs.tag-increment-patch }}
+          image: ${{ needs.docker_build.outputs.image }}
+          tags: ${{ needs.auto_tagging.outputs.docker-tags }}
+          registry: ${{ inputs.docker-registry }}
+          username: ${{ inputs.docker-registry-username || github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}

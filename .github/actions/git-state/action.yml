@@ -1,13 +1,19 @@
 name: Git State
 description: Detect Git state including PR context, open PRs for the current branch, and source/target branch names
 
+inputs:
+  ci-release-branch-patterns:
+    description: "Comma-separated branch patterns to identify release branches (e.g., 'main,release/*')"
+    required: false
+    default: "main"
+
 outputs:
-  is-pull-request:
-    description: "true if running on pull_request event (GITHUB_HEAD_REF is set), false for push events"
-    value: ${{ steps.out.outputs.is-pull-request }}
-  ci-open-pull-request:
+  is-release-branch:
+    description: "true if the target branch (PR) or current branch (push) matches ci-release-branch-patterns"
+    value: ${{ steps.out.outputs.is-release-branch }}
+  has-open-pull-requests:
     description: "true if an open PR exists for the current branch (always true for PR events, queried via API for push events)"
-    value: ${{ steps.out.outputs.ci-open-pull-request }}
+    value: ${{ steps.out.outputs.has-open-pull-requests }}
   source-branch-name:
     description: "Source branch name (GITHUB_HEAD_REF for PR events, GITHUB_REF_NAME for push events)"
     value: ${{ steps.out.outputs.source-branch-name }}
@@ -22,31 +28,59 @@ runs:
       id: out
       env:
         GH_TOKEN: ${{ github.token }}
+        RELEASE_PATTERNS: ${{ inputs.ci-release-branch-patterns }}
       shell: bash
       run: |
         set -euo pipefail
 
+        matches_pattern() {
+          local branch="$1"
+          local patterns="$2"
+
+          IFS=',' read -ra PATTERNS <<< "$patterns"
+          for pattern in "${PATTERNS[@]}"; do
+            pattern=$(echo "$pattern" | xargs)
+            if [[ "$branch" == $pattern ]]; then
+              return 0
+            fi
+          done
+          return 1
+        }
+
         OWNER="${GITHUB_REPOSITORY%%/*}"
-        REPO="${GITHUB_REPOSITORY##*/}"        
-        
+        REPO="${GITHUB_REPOSITORY##*/}"
+
         # Detect PR runs by ref format
         if [[ -n "${GITHUB_HEAD_REF:-}" ]]; then
-          echo "is-pull-request=true" >> "$GITHUB_OUTPUT"
-          echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT" 
+          if matches_pattern "$GITHUB_BASE_REF" "$RELEASE_PATTERNS"; then
+            IS_RELEASE_BRANCH="true"
+          else
+            IS_RELEASE_BRANCH="false"
+          fi
+
+          echo "is-release-branch=$IS_RELEASE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "has-open-pull-requests=true" >> "$GITHUB_OUTPUT"
           echo "source-branch-name=$GITHUB_HEAD_REF" >> "$GITHUB_OUTPUT"
           echo "target-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
-          echo "- [x] is-pull-request">> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] ci-open-pull-request (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] is-release-branch: $IS_RELEASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] has-open-pull-requests (current event, is pull_request)" >> "$GITHUB_STEP_SUMMARY"
           echo "- [x] source-branch-name: $GITHUB_HEAD_REF" >> "$GITHUB_STEP_SUMMARY"
-          echo "- [x] target-branch-name: $GITHUB_BASE_REF" >> "$GITHUB_STEP_SUMMARY"        
+          echo "- [x] target-branch-name: $GITHUB_BASE_REF" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi 
         
         # Push runs
         BRANCH="${GITHUB_REF_NAME}"
-        echo "is-pull-request=false" >> "$GITHUB_OUTPUT"
+
+        if matches_pattern "$BRANCH" "$RELEASE_PATTERNS"; then
+          IS_RELEASE_BRANCH="true"
+        else
+          IS_RELEASE_BRANCH="false"
+        fi
+
         echo "source-branch-name=$BRANCH" >> "$GITHUB_OUTPUT"
         echo "target-branch-name=" >> "$GITHUB_OUTPUT"
+        echo "is-release-branch=$IS_RELEASE_BRANCH" >> "$GITHUB_OUTPUT"        
         
         # Count open PRs for this branch (same-repo branches)
         set +e
@@ -66,13 +100,13 @@ runs:
           COUNT="0"
         fi
 
-        echo "- [ ] is-pull-request">> "$GITHUB_STEP_SUMMARY"
+        echo "- [x] is-release-branch: $IS_RELEASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
         if [[ "$COUNT" == "0" ]]; then
-          echo "ci-open-pull-request=false"  >> "$GITHUB_OUTPUT"
-          echo "- [ ] ci-open-pull-request (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
+          echo "has-open-pull-requests=false"  >> "$GITHUB_OUTPUT"
+          echo "- [ ] has-open-pull-requests (no PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "ci-open-pull-request=true" >> "$GITHUB_OUTPUT"
-          echo "- [X] ci-open-pull-request (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
+          echo "has-open-pull-requests=true" >> "$GITHUB_OUTPUT"
+          echo "- [X] has-open-pull-requests (PR for the same branch detected)" >> "$GITHUB_STEP_SUMMARY"        
         fi
         echo "- [x] source-branch-name: $BRANCH" >> "$GITHUB_STEP_SUMMARY"
         echo "- [x] target-branch-name: -" >> "$GITHUB_STEP_SUMMARY"

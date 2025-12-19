@@ -14,7 +14,7 @@ Creates git tags based on version and target branch. Supports exact version tags
 - `enable-branch-tag`: Enable branch tagging (default: `true`)
 
 **Outputs:**
-- `tags-created`: Space-separated list of created tags
+- `git-tags`: Space-separated list of created tags
 - `exact-tag`: Exact version tag (e.g., `v1.2.12`)
 - `branch-tag`: Branch-level tag (e.g., `v1.2`), empty if not created
 
@@ -71,7 +71,7 @@ Branch tags are "floating" - they move to the latest version on that branch.
 Output to `$GITHUB_OUTPUT`:
 - `exact_tag`: The exact version tag
 - `branch_tag`: The branch tag (or empty)
-- `tags_created`: Space-separated list of both
+- `git_tags`: Space-separated list of both
 
 Write summary to `$GITHUB_STEP_SUMMARY` showing target branch, exact tag, branch tag, and all created tags.
 
@@ -118,7 +118,7 @@ Input: version=v1.2.12, target-branch=v1.2
 → Branch is version-like: v1.2
 → Version matches: 1.2 == 1.2
 → Update branch tag: v1.2
-→ Output: tags-created="v1.2.12 v1.2"
+→ Output: git-tags="v1.2.12 v1.2"
 ```
 
 **Scenario: Version doesn't match branch**
@@ -128,7 +128,7 @@ Input: version=v2.0.0, target-branch=v1.2
 → Branch is version-like: v1.2
 → Version doesn't match: 2.0 != 1.2
 → Skip branch tag
-→ Output: tags-created="v2.0.0"
+→ Output: git-tags="v2.0.0"
 ```
 
 **Scenario: Non-version branch**
@@ -137,5 +137,5 @@ Input: version=v1.2.12, target-branch=main
 → Create exact tag: v1.2.12
 → Branch is not version-like
 → Skip branch tag
-→ Output: tags-created="v1.2.12"
+→ Output: git-tags="v1.2.12"
 ```

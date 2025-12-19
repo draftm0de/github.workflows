@@ -14,7 +14,7 @@ Creates git tags based on version and target branch. Supports exact version tags
 
 | Name | Description |
 |------|-------------|
-| `tags-created` | List of git tags created (space-separated) |
+| `git-tags` | List of git tags created (space-separated) |
 | `exact-tag` | Exact version tag created (e.g., `v1.2.12`) |
 | `branch-tag` | Branch-level tag created (e.g., `v1.2`), empty if not created |
 
@@ -32,7 +32,7 @@ Creates git tags based on version and target branch. Supports exact version tags
 
 - name: Push tags
   run: |
-    git push origin ${{ steps.tagger.outputs.tags-created }}
+    git push origin ${{ steps.tagger.outputs.git-tags }}
 ```
 
 ### With Tag Builder

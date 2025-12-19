@@ -27,12 +27,18 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `badges-script`     | string  | No       | `''`    | npm script to refresh README/coverage badges. Leave blank to skip. |
 | `test-script`       | string  | No       | `''`    | npm script to run test suite (e.g., `test`, `test:ci`). Leave blank to skip. |
 
+### Release Detection
+
+| Name                          | Type    | Required | Default | Description |
+|-------------------------------|---------|----------|---------|-------------|
+| `ci-release-branch-patterns`  | string  | No       | `'main'`| Comma-separated branch patterns to identify release branches (e.g., `'main,release/*'`). Used to determine if a PR targets a release branch or a push is to a release branch. |
+
 ### Tagging
 
-| Name                  | Type    | Required | Default | Description |
-|-----------------------|---------|----------|---------|-------------|
-| `tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `target` (git tags). Leave blank to skip tagging jobs. |
-| `tag-increment-patch` | boolean | No       | `false` | Auto-increment patch version when major.minor match latest tag. |
+| Name                     | Type    | Required | Default | Description |
+|--------------------------|---------|----------|---------|-------------|
+| `ci-tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `target` (git tags). Leave blank to skip tagging jobs. |
+| `ci-tag-increment-patch` | boolean | No       | `false` | Auto-increment patch version when major.minor match latest tag. |
 
 ### Docker
 
@@ -44,6 +50,8 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `docker-build-options`     | string  | No       | `'--no-cache'`  | Additional Docker build options. |
 | `docker-build-reproducible`| boolean | No       | `true`          | Build reproducible Docker image with `SOURCE_DATE_EPOCH`. |
 | `docker-tag-levels`        | string  | No       | `'patch,latest'`| Version levels to tag: `patch`, `minor`, `major`, `latest` (comma-separated). |
+| `docker-registry`          | string  | No       | `'ghcr.io'`     | Docker registry URL (e.g., `'ghcr.io'`). Leave blank for Docker Hub. |
+| `docker-registry-username` | string  | No       | `''`            | Docker registry username. Defaults to `github.actor` if not provided. |
 
 ### Input Notes
 
@@ -51,10 +59,15 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - **Node.js Version**: Provide either `node-version` OR `node-version-env`. The workflow will fail if both are empty.
 - **Scripts**: All script inputs default to empty strings. When empty, the test action skips that step and logs it in the workflow summary.
 
+**Release Detection:**
+- `ci-release-branch-patterns` defines which branches are considered "release" branches (defaults to `'main'`).
+- Supports glob patterns like `'release/*'` or `'hotfix/*'`.
+- Used by the `git-state` action to set `is-release-branch` output.
+
 **Tagging:**
-- Tagging jobs only run when `tag-source` is provided.
+- Tagging jobs only run when `ci-tag-source` is provided.
 - Use `nodejs` to read version from package.json, `flutter` for pubspec.yaml, or `target` to read from git tags.
-- `tag-increment-patch` automatically increments patch version when major.minor match the latest tag.
+- `ci-tag-increment-patch` automatically increments patch version when major.minor match the latest tag.
 
 **Docker:**
 - Docker jobs only run when `docker-image-name` is provided.
@@ -63,6 +76,9 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - `docker-build-options` defaults to `--no-cache` for clean builds.
 - `docker-build-reproducible` uses `SOURCE_DATE_EPOCH` from git commit timestamp for reproducible builds.
 - `docker-tag-levels` controls which version tags to create (defaults to `patch,latest`).
+- `docker-registry` defaults to GitHub Container Registry (`ghcr.io`).
+- `docker-registry-username` defaults to `github.actor` if not provided.
+- Docker push requires both `docker-image-name` AND `ci-tag-source` to be configured.
 
 ## Permissions
 
@@ -92,16 +108,18 @@ jobs:
 
 **Steps**:
 1. Calls `git-state` action to detect:
-   - Whether running in PR context (`is-pull-request`)
-   - Whether an open PR exists for current branch (`ci-open-pull-request`)
+   - Whether an open PR exists for current branch (`has-open-pull-requests`)
    - Source branch name (`source-branch-name`)
    - Target branch name (`target-branch-name`)
+   - Whether branch matches release patterns (`is-release-branch`)
 
 **Outputs**:
-- `is-pull-request`: `'true'` for PR events, `'false'` for push events
-- `ci-open-pull-request`: `'true'` when open PR exists for the branch
+- `has-open-pull-requests`: `'true'` when open PR exists for the branch
 - `source-branch-name`: Source/current branch name
 - `target-branch-name`: Target/base branch name (empty for push events)
+- `is-release-branch`: `'true'` when target/current branch matches `ci-release-branch-patterns`
+
+**Note**: Use `github.event_name` to check the event type (`'pull_request'`, `'push'`, etc.).
 
 ### 2. tests
 
@@ -113,12 +131,15 @@ jobs:
 
 **Runs when**:
 ```yaml
-is-pull-request == 'true' OR ci-open-pull-request == 'false'
+github.event_name == 'pull_request' OR
+github.event_name == 'merge_group' OR
+(github.event_name == 'push' AND has-open-pull-requests == 'false')
 ```
 
 This means:
-- Always runs on PR events
-- Only runs on push events when there's NO open PR for that branch
+- Always runs on `pull_request` events
+- Always runs on `merge_group` events (GitHub merge queue)
+- Only runs on `push` events when there's NO open PR for that branch
 - Avoids duplicate test runs for the same branch
 
 **Steps**:
@@ -127,9 +148,51 @@ This means:
 
 **Uses action**: `draftm0de/github.workflows/.github/actions/node-js-test@main`
 
-### 3. build_on_pull
+### 3. auto_tagging
 
-**Purpose**: Builds Docker image for pull requests.
+**Purpose**: Calculates next version and creates git/docker tag lists.
+
+**Runs on**: `ubuntu-latest`
+
+**Depends on**: `setup`
+
+**Runs when**:
+```yaml
+ci-tag-source != '' AND (
+  github.event_name == 'pull_request' OR
+  github.event_name == 'merge_group' OR
+  (github.event_name == 'push' AND has-open-pull-requests == 'false')
+)
+```
+
+This means:
+- Only runs when `ci-tag-source` is configured
+- Runs on PR events, merge queue events, or push events without open PRs
+- Runs in parallel with tests (doesn't depend on tests)
+
+**Steps**:
+1. Checkout repository with full history (`fetch-depth: 0`)
+2. Read current version using `version-reader` action
+3. Build next version using `tag-builder` action
+4. Create docker tags (if `docker-image-name` provided) using `docker-tag-builder` action
+5. Create git tags using `git-tag-builder` action
+
+**Outputs**:
+- `next-version`: Next version with postfix (e.g., `v1.2.12+build`)
+- `next-version-short`: Next version without postfix (e.g., `v1.2.12`)
+- `is-latest-version`: `'true'` if this is the latest version on the target branch
+- `docker-tags`: Space-separated Docker tags (e.g., `v1.2.12 latest`), empty if docker not configured
+- `git-tags`: Space-separated git tags (e.g., `v1.2.12 v1.2`), empty if not created
+
+**Uses actions**:
+- `draftm0de/github.workflows/.github/actions/version-reader@main`
+- `draftm0de/github.workflows/.github/actions/tag-builder@main`
+- `draftm0de/github.workflows/.github/actions/docker-tag-builder@main`
+- `draftm0de/github.workflows/.github/actions/git-tag-builder@main`
+
+### 4. docker_build
+
+**Purpose**: Builds Docker image and uploads as artifact.
 
 **Runs on**: `ubuntu-latest`
 
@@ -137,54 +200,57 @@ This means:
 
 **Runs when**:
 ```yaml
-is-pull-request == 'true' AND docker-image-name != ''
+docker-image-name != '' AND (
+  github.event_name == 'pull_request' OR
+  github.event_name == 'merge_group' OR
+  (github.event_name == 'push' AND has-open-pull-requests == 'false')
+)
 ```
 
 This means:
-- Only runs for PR events
-- Only when Docker image name is provided
+- Only runs when Docker image name is provided
+- Runs on PR events, merge queue events, or push events without open PRs
 - Only after tests pass
 
 **Steps**:
 1. Checkout repository
-2. Build Docker image using `docker-build` action (no cache, reproducible)
+2. Build Docker image using `docker-build` action
 3. Upload Docker image as artifact using `artifact-from-image` action
+
+**Outputs**:
+- `image`: Docker image reference (e.g., `ghcr.io/org/app@sha256:abc123`)
 
 **Uses actions**:
 - `draftm0de/github.workflows/.github/actions/docker-build@main`
 - `draftm0de/github.workflows/.github/actions/artifact-from-image@main`
 
-### 4. tag_on_pull
+### 5. docker_push
 
-**Purpose**: Validates version and calculates next tag candidate for PRs.
+**Purpose**: Pushes Docker image to registry (release branches only).
 
 **Runs on**: `ubuntu-latest`
 
-**Depends on**: `setup`, `tests`
+**Depends on**: `setup`, `auto_tagging`, `docker_build`
 
 **Runs when**:
 ```yaml
-is-pull-request == 'true' AND tag-source != ''
+docker-image-name != '' AND
+ci-tag-source != '' AND
+github.event_name == 'push' AND
+is-release-branch == 'true'
 ```
 
 This means:
-- Only runs for PR events
-- Only when tagging mode is configured
-- Only after tests pass
+- Only runs when both Docker and tagging are configured
+- Only runs on `push` events to release branches (e.g., `main`, `release/*`)
+- Only after docker_build and auto_tagging complete
 
 **Steps**:
-1. Checkout repository with full history (`fetch-depth: 0`)
-2. Read current version using `version-reader` action:
-   - Type: `nodejs`, `flutter`, or `target` (from `tag-source` input)
-   - Target branch: from `setup` job outputs
-3. Build next version using `tag-builder` action:
-   - Target branch: from `setup` job outputs
-   - Current version: from version-reader step
-   - Patch mode: from `tag-increment-patch` input
+1. Checkout repository
+2. Push Docker image to registry using `docker-push` action
 
 **Uses actions**:
-- `draftm0de/github.workflows/.github/actions/version-reader@main`
-- `draftm0de/github.workflows/.github/actions/tag-builder@main`
+- `draftm0de/github.workflows/.github/actions/docker-push@main`
 
 ## Behavior
 
@@ -193,33 +259,35 @@ This means:
 The workflow uses the `git-state` action to implement intelligent test execution:
 
 **For pull_request events:**
-- `is-pull-request` is `'true'`
+- `github.event_name == 'pull_request'`
 - Tests always run
 - Docker builds and version validation run (if configured)
 
 **For push events:**
-- `is-pull-request` is `'false'`
+- `github.event_name == 'push'`
 - `git-state` queries GitHub API to check for open PRs on the branch
-- If `ci-open-pull-request == 'true'`: tests are skipped (PR workflow already running)
-- If `ci-open-pull-request == 'false'`: tests run (no PR exists, or direct push to protected branch)
+- If `has-open-pull-requests == 'true'`: tests are skipped (PR workflow already running)
+- If `has-open-pull-requests == 'false'`: tests run (no PR exists, or direct push to protected branch)
 
 This prevents duplicate test runs when both events trigger for the same commit.
 
-### Tag Source Modes
+**Note**: When using `workflow_call`, `github.event_name` reflects the calling workflow's trigger event, not `'workflow_call'` itself.
 
-**`tag-source: nodejs`:**
+### CI Tag Source Modes
+
+**`ci-tag-source: nodejs`:**
 - Reads version from `package.json` in repository root
 - Validates version matches semantic version pattern
 - Fails if package.json missing or version invalid
 - Use for: Node.js projects with version in package.json
 
-**`tag-source: flutter`:**
+**`ci-tag-source: flutter`:**
 - Reads version from `pubspec.yaml` in repository root
 - Validates version matches semantic version pattern
 - Fails if pubspec.yaml missing or version invalid
 - Use for: Flutter projects with version in pubspec.yaml
 
-**`tag-source: target`:**
+**`ci-tag-source: target`:**
 - Reads latest semantic version tag from target branch
 - Discovers tags using git history merged into target branch
 - Fails if no valid semantic version tags found
@@ -227,14 +295,14 @@ This prevents duplicate test runs when both events trigger for the same commit.
 
 ### Patch Auto-Increment
 
-When `tag-increment-patch: true`:
+When `ci-tag-increment-patch: true`:
 
 1. Compares current version with latest tag from target branch
 2. If major.minor are the same: increments patch (e.g., `v1.2.3` → `v1.2.4`)
 3. If major or minor increased: uses version as-is with patch `0`
 4. Prevents version drift and ensures monotonic versioning
 
-When `tag-increment-patch: false`:
+When `ci-tag-increment-patch: false`:
 - Uses exact version from source
 - Fails if version already exists or is older than latest tag
 
@@ -259,6 +327,7 @@ jobs:
       node-version: '20'
       lint-script: 'lint'
       test-script: 'test:ci'
+      ci-release-branch-patterns: 'main,develop'
     secrets: inherit
 ```
 
@@ -282,8 +351,9 @@ jobs:
       lint-script: 'lint'
       prettier-script: 'format:check'
       test-script: 'test:ci'
-      tag-source: 'nodejs'
-      tag-increment-patch: true
+      ci-release-branch-patterns: 'main,release/*'
+      ci-tag-source: 'nodejs'
+      ci-tag-increment-patch: true
       docker-image-name: ghcr.io/my-org/my-app
       docker-build-context: '.'
       docker-build-args-file: '.build.args'
@@ -310,8 +380,9 @@ jobs:
       node-version-env: '.env.build'
       lint-script: 'lint'
       test-script: 'test'
-      tag-source: 'target'
-      tag-increment-patch: false
+      ci-release-branch-patterns: 'main,release/*,hotfix/*'
+      ci-tag-source: 'target'
+      ci-tag-increment-patch: false
     secrets: inherit
 ```
 
@@ -337,34 +408,34 @@ jobs:
 This workflow uses the following actions from the same repository:
 - `git-state` - Detects PR state and branch information
 - `node-js-test` - Runs Node.js tests and quality checks
-- `docker-build` - Builds Docker images
-- `artifact-from-image` - Uploads Docker images as artifacts
-- `version-reader` - Reads versions from package.json or branch names
+- `version-reader` - Reads versions from package.json, pubspec.yaml, or git tags
 - `tag-builder` - Builds and validates semantic version tags
+- `docker-tag-builder` - Creates Docker image tags
+- `git-tag-builder` - Creates git tags
+- `docker-build` - Builds Docker images
+- `docker-push` - Pushes Docker images to registry
+- `artifact-from-image` - Uploads Docker images as artifacts
 
 ## Workflow State
 
-**Current Status**: Partially implemented
+**Current Status**: Fully implemented
 
 **Implemented jobs**:
 - ✅ `setup` - Git state detection
-- ✅ `tests` - Test execution with PR guard
-- ✅ `build_on_pull` - Docker builds for PRs
-- ✅ `tag_on_pull` - Version validation for PRs
-
-**Not yet implemented** (future work):
-- ⏳ `build_on_push` - Docker builds and pushes for merge events
-- ⏳ `tag_on_push` - Actual git tag creation on merge
-- ⏳ Push/publish jobs for npm, Docker registry, etc.
-
-The workflow currently handles the complete pull request validation pipeline. Push event jobs (building, tagging, publishing) will be added in future iterations.
+- ✅ `tests` - Test execution with PR guard and merge queue support
+- ✅ `auto_tagging` - Version calculation and tag generation
+- ✅ `docker_build` - Docker image builds (PRs, merge queue, and pushes)
+- ✅ `docker_push` - Docker image pushes to registry (release branches only)
 
 ## Notes
 
 - The workflow enforces that either `node-version` or `node-version-env` is provided
 - All test scripts are optional - skip by leaving blank
 - Docker jobs are opt-in via `docker-image-name` input
-- Tagging jobs are opt-in via `tag-source` input
+- Tagging jobs are opt-in via `ci-tag-source` input
+- Docker push requires both `docker-image-name` AND `ci-tag-source` to be configured
 - The PR guard prevents wasteful duplicate runs on the same branch
+- Supports GitHub merge queue (`merge_group` events)
 - Full git history (`fetch-depth: 0`) is required for version comparison in tagging jobs
 - The workflow uses composite actions, making it easy to test and maintain individual components
+- Docker images are pushed only on `push` events to release branches (configured via `ci-release-branch-patterns`)

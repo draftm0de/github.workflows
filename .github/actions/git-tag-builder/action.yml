@@ -14,9 +14,9 @@ inputs:
     default: 'true'
 
 outputs:
-  tags-created:
+  git-tags:
     description: "List of git tags created (space-separated)"
-    value: ${{ steps.tag.outputs.tags_created }}
+    value: ${{ steps.tag.outputs.git_tags }}
   exact-tag:
     description: "Exact version tag created (e.g., v1.2.12)"
     value: ${{ steps.tag.outputs.exact_tag }}
@@ -120,7 +120,7 @@ runs:
 
         echo "exact_tag=$EXACT_TAG" >> "$GITHUB_OUTPUT"
         echo "branch_tag=$BRANCH_TAG" >> "$GITHUB_OUTPUT"
-        echo "tags_created=$TAGS_CREATED" >> "$GITHUB_OUTPUT"
+        echo "git_tags=$TAGS_CREATED" >> "$GITHUB_OUTPUT"
 
         {
           echo "### git-tag-builder"
