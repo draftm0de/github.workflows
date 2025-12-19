@@ -26,14 +26,16 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate inputs
-      id: validate
+    - name: Workflow Setup
+      id: setup
       shell: bash
       run: |
         set -euo pipefail
 
         IMAGE="${{ inputs.image }}"
         TAGS="${{ inputs.tags }}"
+        USERNAME="${{ inputs.username }}"
+        PASSWORD="${{ inputs.password }}"
 
         if [ -z "$IMAGE" ]; then
           echo "::error::Input 'image' is required"
@@ -45,30 +47,23 @@ runs:
           exit 1
         fi
 
+        if [ -z "$PASSWORD" ]; then
+          echo "::error::Input 'password' is required"
+          exit 1
+        fi
+
         if ! docker inspect --type=image "$IMAGE" >/dev/null 2>&1; then
           echo "::error::Image '$IMAGE' not found locally"
           exit 1
         fi
 
-        echo "::notice::Validated image: $IMAGE"
-        echo "::notice::Tags to push: $TAGS"
-
-    - name: Determine registry username
-      id: username
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        USERNAME="${{ inputs.username }}"
-        TAGS="${{ inputs.tags }}"
-
         if [ -z "$USERNAME" ]; then
-          FIRST_TAG=$(echo "$TAGS" | awk '{print $1}')
-          if [[ "$FIRST_TAG" =~ ^([^/]+)/.*$ ]]; then
+          if [[ "$IMAGE" =~ ^([^/]+)/(.+)$ ]]; then
             USERNAME="${BASH_REMATCH[1]}"
-            echo "::notice::Inferred username from first tag: $USERNAME"
+            IMAGE="${BASH_REMATCH[2]}"
+            echo "::notice::extracted username from image name: $USERNAME"
           else
-            echo "::error::Cannot infer username from tag '$FIRST_TAG'. Please provide 'username' input."
+            echo "::error::Cannot infer username from image name '$IMAGE'. Please provide 'username' input."
             exit 1
           fi
         else
@@ -76,12 +71,15 @@ runs:
         fi
 
         echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
+        echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+        echo "::notice::Validated image: $IMAGE"
+        echo "::notice::Tags to push: $TAGS"
 
     - name: Login to registry
       uses: docker/login-action@v3
       with:
         registry: ${{ inputs.registry }}
-        username: ${{ steps.username.outputs.username }}
+        username: ${{ steps.setup.outputs.username }}
         password: ${{ inputs.password }}
 
     - name: Push Docker image
@@ -90,21 +88,23 @@ runs:
       run: |
         set -euo pipefail
 
-        IMAGE="${{ inputs.image }}"
+        SOURCE_IMAGE="${{ inputs.image }}"
+        IMAGE="${{ steps.setup.outputs.image }}"
         TAGS="${{ inputs.tags }}"
         REGISTRY="${{ inputs.registry }}"
+        USERNAME="${{ steps.setup.outputs.username }}"
 
         PUSHED_TAGS=""
 
         for tag in $TAGS; do
           if [ -n "$REGISTRY" ]; then
-            FULL_TAG="$REGISTRY/$tag"
+            FULL_TAG="$REGISTRY/$USERNAME/$IMAGE:$tag"
           else
-            FULL_TAG="$tag"
+            FULL_TAG="$USERNAME/$IMAGE:$tag"
           fi
 
-          echo "::notice::Tagging $IMAGE as $FULL_TAG"
-          docker tag "$IMAGE" "$FULL_TAG"
+          echo "::notice::Tagging $SOURCE_IMAGE as $FULL_TAG"
+          docker tag "$SOURCE_IMAGE" "$FULL_TAG"
 
           echo "::notice::Pushing $FULL_TAG"
           docker push "$FULL_TAG"
@@ -120,7 +120,7 @@ runs:
 
         {
           echo "### docker-push"
-          echo "- Source image: \`$IMAGE\`"
+          echo "- Source image: \`$SOURCE_IMAGE\`"
           echo "- Registry: \`${REGISTRY:-Docker Hub}\`"
           echo "- Tags pushed:"
           for tag in $PUSHED_TAGS; do

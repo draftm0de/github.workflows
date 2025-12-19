@@ -9,7 +9,7 @@ Pushes a Docker image to a registry with multiple tags in a single operation.
 | `image`    | Local Docker image name to push                                        | Yes      | -       |
 | `tags`     | Space-separated list of tags to push (e.g., `v1.2.12 v1.2 latest`)    | Yes      | -       |
 | `registry` | Registry hostname (e.g., `ghcr.io`, leave blank for Docker Hub)        | No       | -       |
-| `username` | Registry username (inferred from first tag if not provided)            | No       | -       |
+| `username` | Registry username (inferred from image name if not provided)           | No       | -       |
 | `password` | Registry password or token                                             | Yes      | -       |
 
 ## Outputs
@@ -74,11 +74,11 @@ jobs:
 
 ## How It Works
 
-1. **Validation**: Checks that `image` exists locally and `tags` is provided
-2. **Username inference**: If `username` not provided, extracts from first tag (e.g., `ghcr.io/myorg/app` → `myorg`)
+1. **Validation**: Checks that required inputs (`image`, `tags`, `password`) are provided and image exists locally
+2. **Username inference**: If `username` not provided, extracts from image name (e.g., `myuser/myimage` → username: `myuser`, image: `myimage`). The image name is stripped of the username prefix.
 3. **Registry login**: Uses `docker/login-action@v3` with provided credentials
 4. **Tag and push**: For each tag in space-separated list:
-   - Tag local image with `<registry>/<tag>` (or just `<tag>` for Docker Hub)
+   - Tag local image with `<registry>/<username>/<image>:<tag>` (or `<username>/<image>:<tag>` for Docker Hub)
    - Push tagged image to registry
 5. **Summary**: Writes list of all pushed tags to workflow step summary
 
@@ -92,7 +92,7 @@ jobs:
 
 **Docker Hub:**
 - Leave `registry` input blank
-- Provide `username` explicitly (cannot be inferred for Docker Hub)
+- Provide `username` explicitly or use image name format `username/image`
 - Use Docker Hub access token as `password`
 
 ## Example Output
@@ -110,7 +110,8 @@ Tags pushed:
 
 - All tags must be provided in a space-separated list
 - Registry prefix is automatically added to each tag
-- Username inference works for registry-prefixed tags (e.g., `ghcr.io/user/app`, `docker.io/user/app`)
-- For Docker Hub without registry prefix, provide `username` explicitly
+- Username inference extracts from image name format `username/image`
+- If username extracted, image name is stripped to just the image part
+- Final tag format: `<registry>/<username>/<image>:<tag>` or `<username>/<image>:<tag>` without registry
 - Action fails if image doesn't exist locally or if any push fails
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

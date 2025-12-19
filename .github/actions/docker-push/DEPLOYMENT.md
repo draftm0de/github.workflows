@@ -9,14 +9,14 @@ Pushes a Docker image to a registry with multiple tags. Handles registry login, 
 ## Inputs & Outputs
 
 **Inputs:**
-- `image`: Local Docker image name to push
-- `tags`: Comma-separated list of tags (e.g., `v1.2.12,v1.2,latest`)
+- `image`: Local Docker image name to push (e.g., `myuser/myimage` or `myimage`)
+- `tags`: Space-separated list of tags (e.g., `v1.2.12 v1.2 latest`)
 - `registry`: Registry hostname (optional, e.g., `ghcr.io`)
-- `username`: Registry username (optional, inferred if not provided)
-- `password`: Registry password or token
+- `username`: Registry username (optional, inferred from image name if not provided)
+- `password`: Registry password or token (required)
 
 **Outputs:**
-- `tags-pushed`: Comma-separated list of fully-qualified tags that were pushed
+- `tags-pushed`: Space-separated list of fully-qualified tags that were pushed
 
 ## Implementation Steps
 
@@ -27,86 +27,88 @@ Check that required inputs are provided and image exists locally:
 **Validation checks:**
 - `image` is not empty
 - `tags` is not empty
+- `password` is not empty
 - Image exists locally using `docker inspect --type=image`
+
+**Username inference and image name processing:**
+- If `username` is empty:
+  - Extract username from image name using regex: `^([^/]+)/(.+)$`
+  - Example: `myuser/myimage` → username: `myuser`, image: `myimage`
+  - Strip username from image name for later use
+  - Log notice: "extracted username from image name: {username}"
+  - If extraction fails → Error "Cannot infer username from image name" and exit
+- If `username` is provided:
+  - Use provided value
+  - Log notice: "Using provided username: {username}"
+  - Image name remains unchanged
 
 Exit with error if any validation fails.
 
 Log notices for validated image and tags.
 
-### 2. Determine Registry Username
+Output `username` and `image` (possibly stripped) to `$GITHUB_OUTPUT`.
 
-Extract or use provided username for registry login.
-
-**If `username` is provided:**
-- Use provided value
-- Log notice with provided username
-
-**If `username` is empty:**
-- Parse first tag from comma-separated list
-- Extract username using regex: `^([^/]+)/.*$`
-- Example: `ghcr.io/myorg/app:v1.2.12` → username: `myorg`
-- If extraction fails → Error and exit
-- Log notice with inferred username
-
-**Pattern:** `^([^/]+)/.*$`
-- Matches: `ghcr.io/myorg/app` → `ghcr.io`
-- Matches: `myorg/app` → `myorg`
-- No match: `app` (no slash, needs explicit username)
-
-### 3. Login to Registry
+### 2. Login to Registry
 
 Use `docker/login-action@v3` with:
 - `registry`: From input (optional)
-- `username`: From previous step
+- `username`: From validation step output
 - `password`: From input
 
 Action handles authentication and token storage.
 
-### 4. Tag and Push Images
+### 3. Tag and Push Images
 
-Iterate over comma-separated tags and push each one.
+Iterate over space-separated tags and push each one.
+
+**Variables:**
+- `SOURCE_IMAGE`: Original image input (e.g., `myuser/myimage`)
+- `IMAGE`: Processed image name from validation step (e.g., `myimage` if username was stripped)
+- `USERNAME`: Username from validation step
+- `REGISTRY`: Registry input
 
 **For each tag:**
-1. Trim whitespace from tag
-2. Build fully-qualified tag:
-   - If `registry` provided: `<registry>/<tag>`
-   - If `registry` empty: `<tag>` (Docker Hub)
-3. Tag local image: `docker tag <image> <full-tag>`
-4. Push to registry: `docker push <full-tag>`
-5. Append to pushed tags list
+1. Build fully-qualified tag:
+   - If `registry` provided: `<registry>/<username>/<image>:<tag>`
+   - If `registry` empty: `<username>/<image>:<tag>` (Docker Hub)
+2. Tag local image: `docker tag <SOURCE_IMAGE> <full-tag>`
+3. Push to registry: `docker push <full-tag>`
+4. Append to pushed tags list
 
 **Example iteration:**
 ```
-Input tags: "v1.2.12,v1.2,latest"
+Input image: "myuser/myapp"
+Extracted username: "myuser"
+Processed image: "myapp"
+Input tags: "v1.2.12 v1.2 latest"
 Registry: "ghcr.io"
-Image: "myapp:build"
 
 Iteration 1:
   Tag: "v1.2.12"
-  Full tag: "ghcr.io/v1.2.12"
-  Command: docker tag myapp:build ghcr.io/v1.2.12
-  Command: docker push ghcr.io/v1.2.12
+  Full tag: "ghcr.io/myuser/myapp:v1.2.12"
+  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:v1.2.12
+  Command: docker push ghcr.io/myuser/myapp:v1.2.12
 
 Iteration 2:
   Tag: "v1.2"
-  Full tag: "ghcr.io/v1.2"
-  Command: docker tag myapp:build ghcr.io/v1.2
-  Command: docker push ghcr.io/v1.2
+  Full tag: "ghcr.io/myuser/myapp:v1.2"
+  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:v1.2
+  Command: docker push ghcr.io/myuser/myapp:v1.2
 
 Iteration 3:
   Tag: "latest"
-  Full tag: "ghcr.io/latest"
-  Command: docker tag myapp:build ghcr.io/latest
-  Command: docker push ghcr.io/latest
+  Full tag: "ghcr.io/myuser/myapp:latest"
+  Command: docker tag myuser/myapp ghcr.io/myuser/myapp:latest
+  Command: docker push ghcr.io/myuser/myapp:latest
 ```
 
-### 5. Write Outputs
+### 4. Write Outputs
 
 Output pushed tags list to `$GITHUB_OUTPUT`:
-- Format: `tags_pushed=<tag1>,<tag2>,<tag3>`
+- Format: `tags_pushed=<tag1> <tag2> <tag3>` (space-separated)
 
 Write summary to `$GITHUB_STEP_SUMMARY`:
-- Source image
+- Source image (original input)
 - Registry (or "Docker Hub" if empty)
 - List of all pushed tags (bulleted)
 
@@ -114,19 +116,24 @@ Write summary to `$GITHUB_STEP_SUMMARY`:
 
 **Multiple Tags:**
 - Pushes all tags in single action invocation
-- Tags are comma-separated with optional whitespace
+- Tags are space-separated
 - Each tag is pushed independently
 
 **Registry Handling:**
 - Registry prefix is optional
-- When provided, prepended to each tag
-- When empty, assumes Docker Hub
+- When provided, builds: `<registry>/<username>/<image>:<tag>`
+- When empty, builds: `<username>/<image>:<tag>` (Docker Hub)
 
 **Username Inference:**
-- Extracts from first tag if not provided
-- Works for registry-prefixed tags: `registry.io/user/app`
-- Works for Docker Hub format: `user/app`
-- Fails for bare names: `app` (no slash)
+- Extracts from image name if not provided
+- Works for format: `username/image`
+- When extracted, image name is stripped to just the image part
+- Fails for bare names: `image` (no slash, needs explicit username)
+
+**Image Name Processing:**
+- Original image input is preserved as SOURCE_IMAGE for docker tag command
+- If username extracted from image name, the image variable is stripped
+- Stripped image is used to build final tag paths
 
 **Error Handling:**
 - Validation errors stop execution before push
@@ -135,12 +142,12 @@ Write summary to `$GITHUB_STEP_SUMMARY`:
 
 ## Example Outputs
 
-| Input | Output Tags | Notes |
-|-------|-------------|-------|
-| tags=`v1.2.12`, registry=`ghcr.io` | `ghcr.io/v1.2.12` | Single tag with registry |
-| tags=`v1.2.12,latest`, registry=`ghcr.io` | `ghcr.io/v1.2.12,ghcr.io/latest` | Multiple tags with registry |
-| tags=`myorg/app:v1.2.12`, registry=`` | `myorg/app:v1.2.12` | Docker Hub (no registry) |
-| tags=`myorg/app:v1,myorg/app:latest` | `myorg/app:v1,myorg/app:latest` | Docker Hub with multiple tags |
+| Input Image | Username | Tags | Registry | Output Tags | Notes |
+|-------------|----------|------|----------|-------------|-------|
+| `myuser/myapp` | (extracted) | `v1.2.12` | `ghcr.io` | `ghcr.io/myuser/myapp:v1.2.12` | Username extracted from image |
+| `myuser/myapp` | (extracted) | `v1.2.12 latest` | `ghcr.io` | `ghcr.io/myuser/myapp:v1.2.12 ghcr.io/myuser/myapp:latest` | Multiple tags |
+| `myapp` | `myuser` | `v1.2.12` | `` | `myuser/myapp:v1.2.12` | Docker Hub, explicit username |
+| `myuser/myapp` | (extracted) | `v1` | `` | `myuser/myapp:v1` | Docker Hub, extracted username |
 
 ## Dependencies
 

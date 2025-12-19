@@ -85,7 +85,11 @@ on:
         type: string
         default: "ghcr.io"
       docker-registry-username:
-        description: "Docker registry username (leave blank to use github.actor)"
+        description: "Docker registry username"
+        required: false
+        type: string
+      docker-registry-password:
+        description: "Docker registry password (leave blank to use secrets.GITHUB_TOKEN)"
         required: false
         type: string
 
@@ -280,5 +284,5 @@ jobs:
           image: ${{ steps.download.outputs.image }}
           tags: ${{ needs.auto_tagging.outputs.docker-tags }}
           registry: ${{ inputs.docker-registry }}
-          username: ${{ inputs.docker-registry-username || github.actor }}
+          username: ${{ inputs.docker-registry-username }}
           password: ${{ secrets.GITHUB_TOKEN }}

@@ -52,7 +52,8 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `docker-build-reproducible`| boolean | No       | `true`          | Build reproducible Docker image with `SOURCE_DATE_EPOCH`. |
 | `docker-tag-levels`        | string  | No       | `'patch,latest'`| Version levels to tag: `patch`, `minor`, `major`, `latest` (comma-separated). |
 | `docker-registry`          | string  | No       | `'ghcr.io'`     | Docker registry URL (e.g., `'ghcr.io'`). Leave blank for Docker Hub. |
-| `docker-registry-username` | string  | No       | `''`            | Docker registry username. Defaults to `github.actor` if not provided. |
+| `docker-registry-username` | string  | No       | `''`            | Docker registry username. If not provided, extracted from `docker-image-name` (e.g., `myuser/myapp` → `myuser`). |
+| `docker-registry-password` | string  | No       | `''`            | Docker registry password. Defaults to `secrets.GITHUB_TOKEN` if not provided. |
 
 ### Input Notes
 
@@ -80,7 +81,8 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - `docker-build-reproducible` uses `SOURCE_DATE_EPOCH` from git commit timestamp for reproducible builds.
 - `docker-tag-levels` controls which version tags to create (defaults to `patch,latest`).
 - `docker-registry` defaults to GitHub Container Registry (`ghcr.io`).
-- `docker-registry-username` defaults to `github.actor` if not provided.
+- `docker-registry-username` is inferred from `docker-image-name` if not provided (e.g., `myuser/myapp` → username: `myuser`).
+- `docker-registry-password` defaults to `secrets.GITHUB_TOKEN` if not provided.
 - Docker push requires both `docker-image-name` AND `ci-tag-source` to be configured.
 
 ## Permissions
@@ -308,9 +310,16 @@ This means:
 
 **Steps**:
 1. Checkout repository
-2. Push Docker image to registry using `docker-push` action
+2. Load Docker image from artifact using `artifact-to-image` action
+3. Push Docker image to registry using `docker-push` action with:
+   - `image`: Downloaded image from artifact
+   - `tags`: Docker tags from auto_tagging job
+   - `registry`: Registry input (defaults to `ghcr.io`)
+   - `username`: Registry username input (inferred from image name if not provided)
+   - `password`: Registry password input (defaults to `secrets.GITHUB_TOKEN`)
 
 **Uses actions**:
+- `draftm0de/github.workflows/.github/actions/artifact-to-image@main`
 - `draftm0de/github.workflows/.github/actions/docker-push@main`
 
 ## Behavior
