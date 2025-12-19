@@ -1,0 +1,11 @@
+name: flutter-push
+description: Push to pub.flutter
+
+runs:
+  using: "composite"
+  steps:
+    - name: Workflow Setup
+      id: setup
+      shell: bash
+      run: |
+        echo "::notice:: not implemented"

@@ -1,0 +1,138 @@
+name: Flutter CI
+
+on:
+  workflow_call:
+    inputs:
+      pub-cache-key:
+        description: Optional cache key passed to the flutter-test action.
+        required: false
+        type: string
+        default: ''
+      ci-release-branch-patterns:
+        description: "Comma-separated branch patterns to identify release branches (e.g., 'main,release/*')"
+        required: false
+        type: string
+        default: "main"
+      ci-tag-source:
+        description: "Version source type: nodejs, flutter, or target (leave blank to skip tagging)"
+        required: false
+        type: string
+      ci-tag-increment-patch:
+        description: "Auto-increment patch version when major.minor match latest tag"
+        required: false
+        type: boolean
+        default: false
+      git-tag-levels:
+        description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches."
+        required: false
+        type: string
+        default: "patch"
+
+permissions:
+  contents: write    # Required for git_tag_push job
+  pull-requests: read  # Required for git-state action
+
+jobs:
+  # general job to set up some workflow properties
+  setup:
+    name: Workflow Setup
+    runs-on: ubuntu-latest
+    outputs:
+      has-open-pull-requests: ${{ steps.state.outputs.has-open-pull-requests }}
+      source-branch-name: ${{ steps.state.outputs.source-branch-name }}
+      target-branch-name: ${{ steps.state.outputs.target-branch-name }}
+      is-release-branch: ${{ steps.state.outputs.is-release-branch }}
+    steps:
+      - uses: draftm0de/github.workflows/.github/actions/git-state@main
+        id: state
+        with:
+          ci-release-branch-patterns: ${{ inputs.ci-release-branch-patterns }}
+
+  # general job in case of ci-tag-source (auto-tagging)
+  auto_tagging:
+    name: Tag Calculation
+    if: |
+      inputs.ci-tag-source != '' && (
+        github.event_name == 'pull_request' ||
+        github.event_name == 'merge_group' ||
+        (github.event_name == 'push' && needs.setup.outputs.has-open-pull-requests == 'false')
+      )
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    outputs:
+      next-version: ${{ steps.version.outputs.next-version }}
+      next-version-short: ${{ steps.version.outputs.next-version-short }}
+      is-latest-version: ${{ steps.version.outputs.is-latest-version }}
+      git-tags: ${{ steps.git-tags.outputs.git-tags || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read current version
+        id: current-version
+        uses: draftm0de/github.workflows/.github/actions/version-reader@main
+        with:
+          type: ${{ inputs.ci-tag-source }}
+          target-branch-name: ${{ needs.setup.outputs.target-branch-name }}
+
+      - name: Build next version
+        id: version
+        uses: draftm0de/github.workflows/.github/actions/tag-builder@main
+        with:
+          target-branch: ${{ needs.setup.outputs.target-branch-name }}
+          current-version: ${{ steps.current-version.outputs.version }}
+          patch: ${{ inputs.ci-tag-increment-patch }}
+
+      - name: Create git tags
+        id: git-tags
+        if: inputs.git-tag-levels != ''
+        uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+        with:
+          version: ${{ steps.version.outputs.next-version-short }}
+          target-branch: ${{ needs.setup.outputs.target-branch-name }}
+          git-tag-levels: ${{ inputs.git-tag-levels }}
+
+  # flutter specific part about testing
+  tests:
+    name: Tests
+    needs:
+      - setup
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'push' && needs.setup.outputs.has-open-pull-requests == 'false')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run flutter tests
+        uses: draftm0de/github.workflows/.github/actions/test-flutter@main
+        with:
+          pub-cache-key: ${{ inputs.pub-cache-key || '' }}
+
+  # general job to create and push git tags (only on push to release branch)
+  git_push:
+    name: Push Git Tags
+    if: |
+      github.event_name == 'push' &&
+      needs.setup.outputs.is-release-branch == 'true' &&
+      needs.auto_tagging.outputs.git-tags != ''
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - auto_tagging
+      - tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push git tags to remote
+        uses: draftm0de/github.workflows/.github/actions/git-push@main
+        with:
+          tags: ${{ needs.auto_tagging.outputs.git-tags }}

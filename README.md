@@ -8,22 +8,31 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 - Encourage contributions from anyone who spots an automation gap—open an issue or PR when a new workflow belongs here.
 
 ## Flutter Workflows
-- [`flutter-ci.yml`](.github/workflows-kept/flutter-ci.md) — Pull-request guardrail that checks semantic version drift, formatting, analyzer warnings, localization artifacts, and `flutter test` results before merges.
-- [`flutter-release.yml`](.github/workflows-kept/flutter-release.md) — Push-triggered release helper that bumps `pubspec.yaml`, commits the change, and creates a matching git tag so packages ship consistently.
+- [`flutter-ci.yml`](.github/workflows/flutter-ci.md) — Complete CI/CD reusable workflow with Flutter testing and semantic version validation. Supports version-based releases with automated git tagging. Publishing to pub.dev coming soon.
 
 ## Node.js Workflows
-- [`node-js-ci.yml`](.github/workflows/node-js-ci.md) — Pull-request/reusable workflow that validates `package.json` versions, runs lint/Prettier/badge scripts, and executes the Node test suite.
-
-## Docker Workflows
-- [`docker-build.yml`](.github/workflows/docker-build.md) — Reusable build wrapper that outputs both the digest and an artifact for later jobs.
-- [`docker-push.yml`](.github/workflows/docker-push.md) — Reusable push workflow that rehydrates an artifact (or local image) and authenticates with the requested registry.
+- [`node-js-ci.yml`](.github/workflows/node-js-ci.md) — Complete CI/CD reusable workflow with testing, semantic versioning, Docker builds, and automated tagging. Supports version-based releases with git tags and Docker registry pushes.
 
 ## Shared Actions
-- [`flutter-auto-tagging`](.github/actions/flutter-auto-tagging/README.md) — Parses `pubspec.yaml`, validates existing tags, and emits both the current and next semantic versions.
+
+### Testing
 - [`test-flutter`](.github/actions/test-flutter/README.md) — Sets up Flutter, verifies generated localizations, enforces formatting/analyzer rules, and runs the project's test suite.
-- [`node-js-auto-tagging`](.github/actions/node-js-auto-tagging/README.md) — Reads `package.json`, enforces semver ordering vs. git tags, and emits both current and next patch versions for downstream workflows.
 - [`test-node-js`](.github/actions/test-node-js/README.md) — Installs dependencies, runs lint/Prettier/badge npm scripts, and executes the Node test suite while emitting GitHub summary checklists.
-- [`docker-build`](.github/actions/docker-build/README.md) — Builds Docker images (with optional Buildx reproducibility) and uploads them as artifacts.
-- [`docker-push`](.github/actions/docker-push/README.md) — Loads an image (or artifact), retags if needed, logs into a registry, and pushes.
+
+### Git & Workflow State
+- [`git-state`](.github/actions/git-state/README.md) — Detects PR state, branch information, and prevents duplicate test runs when both push and pull_request events trigger.
+- [`git-push`](.github/actions/git-push/README.md) — Pushes git tags to remote repositories.
+
+### Versioning & Tagging
+- [`version-reader`](.github/actions/version-reader/README.md) — Reads versions from package.json, pubspec.yaml, or git tags for semantic versioning workflows.
+- [`tag-builder`](.github/actions/tag-builder/README.md) — Builds and validates semantic version tags with auto-increment support and version drift detection.
+- [`git-tag-builder`](.github/actions/git-tag-builder/README.md) — Creates git tags for semantic versions, filtering out levels covered by version-like branches.
+- [`docker-tag-builder`](.github/actions/docker-tag-builder/README.md) — Builds Docker image tags from semantic versions or custom tags (sha, edge, beta). Supports patch/minor/major levels and latest tag detection.
+
+### Docker
+- [`docker-build`](.github/actions/docker-build/README.md) — Builds Docker images with optional Buildx reproducibility. Defaults to short git SHA tag when no tag provided.
+- [`docker-push`](.github/actions/docker-push/README.md) — Pushes Docker images to registries with username inference from image names, automatic tag stripping, and multi-tag support.
+
+### Artifacts
 - [`artifact-from-image`](.github/actions/artifact-from-image/README.md) — Saves a Docker image to an artifact for later workflows.
 - [`artifact-to-image`](.github/actions/artifact-to-image/README.md) — Downloads a Docker image artifact and loads it back into the Docker daemon.
