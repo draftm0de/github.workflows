@@ -75,7 +75,7 @@ on:
         type: string
         default: "patch,latest"
       git-tag-levels:
-        description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches. 'latest' not allowed."
+        description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches."
         required: false
         type: string
         default: "patch"
@@ -150,7 +150,7 @@ jobs:
 
       - name: Create docker tags
         id: docker-tags
-        if: inputs.docker-image-name != ''
+        if: inputs.docker-tag-levels != ''
         uses: draftm0de/github.workflows/.github/actions/docker-tag-builder@main
         with:
           version: ${{ steps.version.outputs.next-version-short }}
@@ -159,6 +159,7 @@ jobs:
 
       - name: Create git tags
         id: git-tags
+        if: inputs.git-tag-levels != ''
         uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
         with:
           version: ${{ steps.version.outputs.next-version-short }}
@@ -229,7 +230,6 @@ jobs:
   git_tag_push:
     name: Push Git Tags
     if: |
-      inputs.ci-tag-source != '' &&
       github.event_name == 'push' &&
       needs.setup.outputs.is-release-branch == 'true' &&
       needs.auto_tagging.outputs.git-tags != ''
@@ -253,10 +253,10 @@ jobs:
   docker_push:
     name: Push Docker Image
     if: |
-      inputs.docker-image-name != '' &&
-      inputs.ci-tag-source != '' &&
       github.event_name == 'push' &&
-      needs.setup.outputs.is-release-branch == 'true'
+      needs.setup.outputs.is-release-branch == 'true' &&      
+      inputs.docker-image-name != '' &&
+      needs.auto_tagging.outputs.docker-tags != ''
     runs-on: ubuntu-latest
     needs:
       - setup
