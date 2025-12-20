@@ -1,0 +1,112 @@
+name: version-patch
+description: Update package.json or pubspec.yaml with new version and commit to main
+
+inputs:
+  ci-tag-source:
+    description: "Version source type: nodejs, flutter, or branch"
+    required: true
+  new-version:
+    description: "New version to write (e.g., 1.2.4, v1.2.4)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update version file
+      id: update
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SOURCE="${{ inputs.ci-tag-source }}"
+        VERSION="${{ inputs.new-version }}"
+
+        # Strip 'v' prefix if present
+        CLEAN_VERSION="${VERSION#v}"
+
+        case "$SOURCE" in
+          nodejs)
+            if [ ! -f "package.json" ]; then
+              echo "::error::package.json not found in repository root"
+              exit 1
+            fi
+
+            echo "::notice::Updating package.json version to $CLEAN_VERSION"
+
+            # Use jq to update version field
+            if ! command -v jq &> /dev/null; then
+              echo "::error::jq is required but not installed"
+              exit 1
+            fi
+
+            jq --arg version "$CLEAN_VERSION" '.version = $version' package.json > package.json.tmp
+            mv package.json.tmp package.json
+
+            echo "file=package.json" >> "$GITHUB_OUTPUT"
+            ;;
+
+          flutter)
+            if [ ! -f "pubspec.yaml" ]; then
+              echo "::error::pubspec.yaml not found in repository root"
+              exit 1
+            fi
+
+            echo "::notice::Updating pubspec.yaml version to $CLEAN_VERSION"
+
+            # Use sed to update version field in YAML
+            sed -i.bak "s/^version: .*/version: $CLEAN_VERSION/" pubspec.yaml
+            rm -f pubspec.yaml.bak
+
+            echo "file=pubspec.yaml" >> "$GITHUB_OUTPUT"
+            ;;
+
+          branch)
+            echo "::notice::Skipping version file update for ci-tag-source=branch"
+            echo "file=" >> "$GITHUB_OUTPUT"
+            exit 0
+            ;;
+
+          *)
+            echo "::error::Unknown ci-tag-source '$SOURCE' (valid: nodejs, flutter, branch)"
+            exit 1
+            ;;
+        esac
+
+        echo "version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### version-patch"
+          echo "- Source type: \`$SOURCE\`"
+          echo "- New version: \`$CLEAN_VERSION\`"
+          echo "- File updated: \`${{ steps.update.outputs.file }}\`"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Commit and push version update
+      if: steps.update.outputs.file != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        FILE="${{ steps.update.outputs.file }}"
+        VERSION="${{ steps.update.outputs.version }}"
+
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        # Stage the updated file
+        git add "$FILE"
+
+        # Check if there are changes to commit
+        if git diff --cached --quiet; then
+          echo "::notice::No changes to commit (version already up to date)"
+          exit 0
+        fi
+
+        # Commit with version in message
+        git commit -m "chore: bump version to $VERSION"
+
+        # Push to current branch
+        git push origin HEAD
+
+        echo "::notice::Successfully committed and pushed version update to $VERSION"

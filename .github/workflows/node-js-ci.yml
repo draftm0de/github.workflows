@@ -233,6 +233,31 @@ jobs:
         with:
           image: ${{ steps.build.outputs.image }}
 
+  # general job to update version file (only on push to release branch)
+  version_update:
+    name: Update Version File
+    if: |
+      github.event_name == 'push' &&
+      needs.setup.outputs.is-release-branch == 'true' &&
+      inputs.ci-tag-source != '' &&
+      inputs.ci-tag-increment-patch == 'true'
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - auto_tagging
+      - tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update version file
+        uses: draftm0de/github.workflows/.github/actions/version-patch@main
+        with:
+          ci-tag-source: ${{ inputs.ci-tag-source }}
+          new-version: ${{ needs.auto_tagging.outputs.next-version-short }}
+
   # general job to create and push git tags (only on push to release branch)
   git_push:
     name: Push Git Tags
@@ -245,6 +270,7 @@ jobs:
       - setup
       - auto_tagging
       - tests
+      - version_update
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

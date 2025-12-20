@@ -26,6 +26,7 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 ### Versioning & Tagging
 - [`version-reader`](.github/actions/version-reader/README.md) — Reads versions from package.json, pubspec.yaml, or git tags for semantic versioning workflows.
 - [`tag-builder`](.github/actions/tag-builder/README.md) — Builds and validates semantic version tags with auto-increment support and version drift detection.
+- [`version-patch`](.github/actions/version-patch/README.md) — Updates package.json or pubspec.yaml with new version and commits to main. Triggered when `ci-tag-source` and `ci-tag-increment-patch: true` are set. **Requires `contents: write` permission** and [Allow GitHub Actions to create and approve pull requests](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#preventing-github-actions-from-creating-or-approving-pull-requests) enabled in repository settings.
 - [`git-tag-builder`](.github/actions/git-tag-builder/README.md) — Creates git tags for semantic versions, filtering out levels covered by version-like branches.
 - [`docker-tag-builder`](.github/actions/docker-tag-builder/README.md) — Builds Docker image tags from semantic versions or custom tags (sha, edge, beta). Supports patch/minor/major levels and latest tag detection.
 
@@ -36,3 +37,10 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 ### Artifacts
 - [`artifact-from-image`](.github/actions/artifact-from-image/README.md) — Saves a Docker image to an artifact for later workflows.
 - [`artifact-to-image`](.github/actions/artifact-to-image/README.md) — Downloads a Docker image artifact and loads it back into the Docker daemon.
+
+## GitHub
+
+### Allow GitHub Actions to create and approve pull requests
+1. Navigate to repository Settings → Actions → General
+2. Section: Workflow permissions
+3. [x] Allow GitHub Actions to create and approve pull requests

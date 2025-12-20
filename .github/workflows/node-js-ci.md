@@ -37,7 +37,7 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 
 | Name                     | Type    | Required | Default | Description |
 |--------------------------|---------|----------|---------|-------------|
-| `ci-tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `target` (git tags). Leave blank to skip tagging jobs. |
+| `ci-tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `branch` (git tags). Leave blank to skip tagging jobs. |
 | `ci-tag-increment-patch` | boolean | No       | `false` | Auto-increment patch version when major.minor match latest tag. |
 | `git-tag-levels`         | string  | No       | `'patch'` | Git tag levels to create: `patch`, `minor`, `major` (comma-separated). Filters out levels covered by version-like branches. `'latest'` not allowed. |
 
@@ -360,7 +360,7 @@ This prevents duplicate test runs when both events trigger for the same commit.
 - Fails if pubspec.yaml missing or version invalid
 - Use for: Flutter projects with version in pubspec.yaml
 
-**`ci-tag-source: target`:**
+**`ci-tag-source: branch`:**
 - Reads latest semantic version tag from target branch
 - Discovers tags using git history merged into target branch
 - Fails if no valid semantic version tags found
@@ -454,7 +454,7 @@ jobs:
       lint-script: 'lint'
       test-script: 'test'
       ci-release-branch-patterns: 'main,release/*,hotfix/*'
-      ci-tag-source: 'target'
+      ci-tag-source: 'branch'
       ci-tag-increment-patch: false
     secrets: inherit
 ```
@@ -502,12 +502,31 @@ This workflow uses the following actions from the same repository:
 - ✅ `git_push` - Git tag creation and push to remote (release branches only)
 - ✅ `docker_push` - Docker image pushes to registry (release branches only)
 
+## GitHub Configuration
+
+When using automatic version patching (`ci-tag-increment-patch: true`), the repository requires specific settings:
+
+### Required Workflow Permissions
+
+The workflow already declares `contents: write` permission for version file updates and git tag pushes.
+
+### Required Repository Settings
+
+Enable "Allow GitHub Actions to create and approve pull requests":
+
+1. Navigate to repository Settings → Actions → General
+2. Scroll to "Workflow permissions"
+3. Enable: ☑ Allow GitHub Actions to create and approve pull requests
+
+See [GitHub Configuration](../../README.md#github) in the root README for detailed setup instructions.
+
 ## Notes
 
 - The workflow enforces that either `node-version` or `node-version-env` is provided
 - All test scripts are optional - skip by leaving blank
 - Docker jobs are opt-in via `docker-image-name` input
 - Tagging jobs are opt-in via `ci-tag-source` input
+- **Version File Updates**: When `ci-tag-source` and `ci-tag-increment-patch: true` are set, the workflow automatically updates `package.json` (nodejs) or `pubspec.yaml` (flutter) with the new version and commits it to the release branch before creating git tags
 - Docker tag calculation is conditional on `docker-tag-levels` input
 - Git tag calculation is conditional on `git-tag-levels` input
 - Git tags are pushed only when `git-tags` output is non-empty
