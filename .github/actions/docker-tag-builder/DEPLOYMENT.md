@@ -12,7 +12,8 @@ Builds Docker image tags based on optional version and global latest version det
 - `version`: Optional version to tag (format: `[v]X.Y.Z[+postfix]`). Required for `major`, `minor`, `patch` levels.
 - `is-latest-version`: Boolean indicating if this is globally latest
 - `tag-levels`: Comma-separated levels: `patch`, `minor`, `major`, `latest`, or custom tags (default: `patch`)
-- `git-tag-levels`: Optional git tag levels. When provided, validates semantic docker levels are subset of git levels.
+- `git-tag-levels`: Optional git tag levels. When provided with `ci-tag-source: branch`, validates semantic docker levels are subset of git levels.
+- `ci-tag-source`: Version source type (`nodejs`, `flutter`, `branch`). Validation only enforced when set to `branch`.
 
 **Outputs:**
 - `docker-tags`: Space-separated list of tags
@@ -21,23 +22,24 @@ Builds Docker image tags based on optional version and global latest version det
 
 ## Implementation Steps
 
-### 1. Validate Tag Level Consistency (if git-tag-levels provided)
+### 1. Validate Tag Level Consistency (only for ci-tag-source: branch)
 
-**If `git-tag-levels` is provided:**
+**Check ci-tag-source:**
+- If `ci-tag-source != 'branch'` (e.g., `nodejs` or `flutter`):
+  - Log notice: "ci-tag-source is '{source}' (not 'branch'), skipping consistency validation"
+  - Exit 0 (skip validation)
+
+**If `ci-tag-source == 'branch'`:**
 - Split `tag-levels` by comma into array
 - For each docker tag level:
   - Trim whitespace
   - Check if level is semantic: `patch`, `minor`, or `major`
   - If semantic: verify it exists in `git-tag-levels` using regex: `(^|,)$level(,|$)`
-  - If not found in git levels:
+  - If not found in git levels (including when `git-tag-levels` is empty):
     - Log error with details: docker level, current docker-tag-levels, current git-tag-levels
     - Exit 1
   - If not semantic (custom tag or `latest`): skip validation
 - Log success notice if all semantic levels validated
-
-**If `git-tag-levels` is empty:**
-- Log notice: "No git-tag-levels provided, skipping consistency validation"
-- Continue to next step
 
 **Error messages:**
 ```
@@ -168,7 +170,7 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
 
 ## Error Conditions
 
-- Docker semantic level not in git-tag-levels (when git-tag-levels provided) → Exit 1
+- Docker semantic level not in git-tag-levels (when `ci-tag-source: branch`) → Exit 1
 - Invalid version format (when provided) → Exit 1
 - Semantic level (`major`, `minor`, `patch`) without version → Exit 1
 - No tags generated → Exit 1
@@ -180,20 +182,21 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
 
 ## Integration Examples
 
-### Semantic Version Tags with Git Validation
+### Semantic Version Tags with Git Validation (Branch-based)
 
 ```yaml
 # Step 1: Build version
 - uses: tag-builder
   outputs: next-version-short, is-latest-version
 
-# Step 2: Build Docker tags (with git validation)
+# Step 2: Build Docker tags (with git validation for branch-based versioning)
 - uses: docker-tag-builder
   inputs:
     version: {version}
     is-latest-version: {is-latest}
     tag-levels: 'patch,minor,major'
     git-tag-levels: 'patch,minor,major'
+    ci-tag-source: 'branch'
   outputs: docker-tags
 
 # Step 3: Build git tags
@@ -209,6 +212,20 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
       docker tag image:build image:$tag
       docker push image:$tag
     done
+```
+
+### Node.js/Flutter (No Validation)
+
+```yaml
+# Build Docker tags for Node.js project (validation skipped)
+- uses: docker-tag-builder
+  with:
+    version: {version}
+    is-latest-version: {is-latest}
+    tag-levels: 'patch,latest'
+    git-tag-levels: ''
+    ci-tag-source: 'nodejs'
+  outputs: docker-tags
 ```
 
 ### Custom Tags Only

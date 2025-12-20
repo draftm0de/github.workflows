@@ -12,7 +12,7 @@ Creates git tags based on version and target branch. Supports exact version tags
 - `version`: Version to tag (format: `[v]X.Y.Z[+postfix]`)
 - `target-branch`: Branch name (e.g., `main`, `v1.2`)
 - `enable-branch-tag`: Enable branch tagging (default: `true`)
-- `git-tag-levels`: Comma-separated levels (default: `'patch'`)
+- `git-tag-levels`: Comma-separated levels (default: `''` - empty/none)
 
 **Outputs:**
 - `git-tags`: Space-separated list of created tags

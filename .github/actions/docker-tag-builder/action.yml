@@ -15,6 +15,10 @@ inputs:
   git-tag-levels:
     description: "Git tag levels (optional). When provided, validates that semantic docker tag levels are subset of git tag levels."
     required: false
+  ci-tag-source:
+    description: "Version source type (nodejs, flutter, branch). Validation only enforced when set to 'branch'."
+    required: false
+    default: ''
 
 outputs:
   docker-tags:
@@ -37,9 +41,10 @@ runs:
 
         DOCKER_LEVELS="${{ inputs.tag-levels }}"
         GIT_LEVELS="${{ inputs.git-tag-levels }}"
+        CI_TAG_SOURCE="${{ inputs.ci-tag-source }}"
 
-        if [ -z "$GIT_LEVELS" ]; then
-          echo "::notice::No git-tag-levels provided, skipping consistency validation"
+        if [ "$CI_TAG_SOURCE" != "branch" ]; then
+          echo "::notice::ci-tag-source is '$CI_TAG_SOURCE' (not 'branch'), skipping consistency validation"
           exit 0
         fi
 

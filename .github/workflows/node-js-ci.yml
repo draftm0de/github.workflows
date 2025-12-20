@@ -78,7 +78,7 @@ on:
         description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches."
         required: false
         type: string
-        default: "patch"
+        default: ""
       docker-registry:
         description: "Docker registry URL (e.g., 'ghcr.io', leave blank for Docker Hub)"
         required: false
@@ -162,6 +162,7 @@ jobs:
           is-latest-version: ${{ steps.version.outputs.is-latest-version }}
           tag-levels: ${{ inputs.docker-tag-levels }}
           git-tag-levels: ${{ inputs.git-tag-levels }}
+          ci-tag-source: ${{ inputs.ci-tag-source }}
 
       - name: Create git tags
         id: git-tags

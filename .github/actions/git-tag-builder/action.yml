@@ -15,7 +15,7 @@ inputs:
   git-tag-levels:
     description: "Comma-separated tag levels to create: patch, minor, major (e.g., 'patch,minor,major'). Filters out levels already covered by version-like branches. Never includes 'latest'."
     required: false
-    default: 'patch'
+    default: ''
 
 outputs:
   git-tags:
@@ -89,10 +89,11 @@ runs:
         fi
 
         # Create multi-level tags based on git-tag-levels input
-        IFS=',' read -ra LEVELS <<< "$TAG_LEVELS"
-        for level in "${LEVELS[@]}"; do
-          level=$(echo "$level" | xargs)
-          case "$level" in
+        if [ -n "$TAG_LEVELS" ]; then
+          IFS=',' read -ra LEVELS <<< "$TAG_LEVELS"
+          for level in "${LEVELS[@]}"; do
+            level=$(echo "$level" | xargs)
+            case "$level" in
             patch)
               # Patch is always the exact tag, already added
               ;;
@@ -126,8 +127,9 @@ runs:
               echo "::error::Unknown tag level '$level' (valid: patch, minor, major)"
               exit 1
               ;;
-          esac
-        done
+            esac
+          done
+        fi
 
         # Determine if we should create a branch-level tag
         BRANCH_TAG=""

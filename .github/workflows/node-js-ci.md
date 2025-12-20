@@ -39,7 +39,7 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 |--------------------------|---------|----------|---------|-------------|
 | `ci-tag-source`          | string  | No       | `''`    | Version source type: `nodejs` (package.json), `flutter` (pubspec.yaml), or `branch` (git tags). Leave blank to skip tagging jobs. |
 | `ci-tag-increment-patch` | boolean | No       | `false` | Auto-increment patch version when major.minor match latest tag. |
-| `git-tag-levels`         | string  | No       | `'patch'` | Git tag levels to create: `patch`, `minor`, `major` (comma-separated). Filters out levels covered by version-like branches. `'latest'` not allowed. |
+| `git-tag-levels`         | string  | No       | `''` | Git tag levels to create: `patch`, `minor`, `major` (comma-separated). Filters out levels covered by version-like branches. `'latest'` not allowed. Empty by default (no multi-level tags). |
 
 ### Docker
 

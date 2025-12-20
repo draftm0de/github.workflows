@@ -9,7 +9,7 @@ Creates git tags based on version and target branch. Supports exact version tags
 | `version`           | Version to tag (e.g., `v1.2.12`, `1.2.12`)                                                                                                        | Yes      | -         |
 | `target-branch`     | Target branch name (e.g., `main`, `v1.2`, `develop`)                                                                                              | Yes      | -         |
 | `enable-branch-tag` | Enable branch-level tagging when branch is version-like                                                                                           | No       | `'true'`  |
-| `git-tag-levels`    | Comma-separated tag levels: `patch`, `minor`, `major` (e.g., `'patch,minor,major'`). Filters out levels already covered by version-like branches. | No       | `'patch'` |
+| `git-tag-levels`    | Comma-separated tag levels: `patch`, `minor`, `major` (e.g., `'patch,minor,major'`). Filters out levels already covered by version-like branches. | No       | `''` (none) |
 
 ## Outputs
 

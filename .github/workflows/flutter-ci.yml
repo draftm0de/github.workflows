@@ -26,7 +26,7 @@ on:
         description: "Git tag levels to create: patch, minor, major (comma-separated). Filters out levels covered by version-like branches."
         required: false
         type: string
-        default: "patch"
+        default: ""
 
 permissions:
   contents: write    # Required for git_tag_push job

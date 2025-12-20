@@ -9,7 +9,8 @@ Builds Docker image tags based on version and latest version detection. Supports
 | `version`           | Version to tag (e.g., `v1.2.12`, `1.2.12`). Required for `major`/`minor`/`patch` levels. | No       | -        |
 | `is-latest-version` | Whether this is the latest version globally (`true`/`false`) | Yes      | -         |
 | `tag-levels`        | Tag levels: `patch`, `minor`, `major`, `latest`, or custom tags (e.g., `sha`, `edge`, `beta`). Comma-separated. | No | `'patch'` |
-| `git-tag-levels`    | Git tag levels (optional). When provided, validates that semantic docker tag levels (`patch`, `minor`, `major`) are subset of git tag levels. | No | - |
+| `git-tag-levels`    | Git tag levels (optional). When provided with `ci-tag-source: branch`, validates that semantic docker tag levels (`patch`, `minor`, `major`) are subset of git tag levels. | No | - |
+| `ci-tag-source`     | Version source type (`nodejs`, `flutter`, `branch`). Validation only enforced when set to `branch`. | No | - |
 
 ## Outputs
 
@@ -158,19 +159,22 @@ Control which tags to create using `tag-levels` (comma-separated):
 
 ## Tag Level Validation
 
-When `git-tag-levels` is provided, the action validates that semantic docker tag levels are tracked in git:
+When `git-tag-levels` is provided **AND** `ci-tag-source: 'branch'`, the action validates that semantic docker tag levels are tracked in git:
 
 **Rule**: Docker semantic tag levels (`patch`, `minor`, `major`) must be a subset of git tag levels.
 
 **Examples:**
-- `tag-levels: 'latest,major,minor'` + `git-tag-levels: 'major,minor'` ✅
-- `tag-levels: 'patch,latest'` + `git-tag-levels: 'patch'` ✅
-- `tag-levels: 'minor'` + `git-tag-levels: 'patch'` ❌ (git doesn't include `minor`)
+- `tag-levels: 'latest,major,minor'` + `git-tag-levels: 'major,minor'` + `ci-tag-source: 'branch'` ✅
+- `tag-levels: 'patch,latest'` + `git-tag-levels: 'patch'` + `ci-tag-source: 'branch'` ✅
+- `tag-levels: 'minor'` + `git-tag-levels: 'patch'` + `ci-tag-source: 'branch'` ❌ (git doesn't include `minor`)
 - `tag-levels: 'latest,sha,edge'` + `git-tag-levels: ''` ✅ (no semantic docker tags)
+- `tag-levels: 'patch'` + `git-tag-levels: 'patch'` + `ci-tag-source: 'nodejs'` ✅ (validation skipped for nodejs/flutter)
 
-**Why**: Ensures git repository tracks at least the same version granularity as Docker registry, preventing version drift.
+**Why**: Ensures git repository tracks at least the same version granularity as Docker registry when using branch-based versioning, preventing version drift.
 
-**Note**: Custom tags (`sha`, `edge`, `beta`, `latest`) are ignored in validation.
+**Note**:
+- Custom tags (`sha`, `edge`, `beta`, `latest`) are ignored in validation
+- Validation only runs for `ci-tag-source: 'branch'` - skipped for `nodejs` and `flutter` sources
 
 ## Notes
 
