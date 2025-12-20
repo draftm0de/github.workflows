@@ -12,6 +12,10 @@ inputs:
     description: "Enable patch mode to auto-increment patch version"
     required: false
     default: 'false'
+  ci-tag-source:
+    description: "Version source type (nodejs, flutter, branch). Affects versioning behavior."
+    required: false
+    default: ''
 
 outputs:
   next-version:
@@ -214,42 +218,51 @@ runs:
         LATEST_PATCH="${{ steps.latest.outputs.latest_patch }}"
 
         PATCH_MODE="${{ inputs.patch }}"
+        CI_TAG_SOURCE="${{ inputs.ci-tag-source }}"
 
-        if [[ "$PATCH_MODE" == "true" ]]; then
-          if [ "$CURRENT_MAJOR" -gt "$LATEST_MAJOR" ]; then
-            if [ "$CURRENT_PATCH" -gt 0 ]; then
-              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
-              echo "::notice::Patch mode: new major version with patch $CURRENT_PATCH, using current"
-            else
-              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
-              echo "::notice::Patch mode: new major version, setting patch to 0"
-            fi
-          elif [ "$CURRENT_MINOR" -gt "$LATEST_MINOR" ]; then
-            if [ "$CURRENT_PATCH" -gt 0 ]; then
-              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
-              echo "::notice::Patch mode: new minor version with patch $CURRENT_PATCH, using current"
-            else
-              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
-              echo "::notice::Patch mode: new minor version, setting patch to 0"
-            fi
-          elif [ "$CURRENT_PATCH" -gt "$LATEST_PATCH" ]; then
-            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
-            echo "::notice::Patch mode: current patch ($CURRENT_PATCH) is newer than latest ($LATEST_PATCH), using current"
-          else
-            NEXT_PATCH=$((LATEST_PATCH + 1))
+        # Check if there are no existing tags (latest is default 0.0.0)
+        NO_TAGS="false"
+        if [ "$LATEST_MAJOR" -eq 0 ] && [ "$LATEST_MINOR" -eq 0 ] && [ "$LATEST_PATCH" -eq 0 ]; then
+          NO_TAGS="true"
+        fi
+
+        # For nodejs/flutter sources: version file is source of truth
+        if [[ "$CI_TAG_SOURCE" == "nodejs" || "$CI_TAG_SOURCE" == "flutter" ]]; then
+          if [[ "$PATCH_MODE" == "true" ]]; then
+            # File-based with auto-increment: increment patch from file version
+            NEXT_PATCH=$((CURRENT_PATCH + 1))
             VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
-            echo "::notice::Patch mode: incrementing patch from $LATEST_PATCH to $NEXT_PATCH"
+            echo "::notice::ci-tag-source=$CI_TAG_SOURCE with patch mode: incrementing file version from $CURRENT_MAJOR.$CURRENT_MINOR.$CURRENT_PATCH to $VERSION_SHORT"
+          else
+            # File-based without increment: use file version as-is
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+            echo "::notice::ci-tag-source=$CI_TAG_SOURCE without patch mode: using file version as-is ($VERSION_SHORT)"
           fi
         else
-          if [ "$LATEST_MAJOR" -eq "$CURRENT_MAJOR" ] && \
-             [ "$LATEST_MINOR" -eq "$CURRENT_MINOR" ] && \
-             [ "$LATEST_PATCH" -ge "$CURRENT_PATCH" ]; then
-            echo "::error::Latest patch $LATEST_PATCH is >= current patch $CURRENT_PATCH (use patch mode or increment version)"
-            exit 1
+          # Branch-based or unspecified: use git tag comparison logic
+          if [[ "$PATCH_MODE" == "true" ]]; then
+            if [ "$NO_TAGS" == "true" ]; then
+              # No previous tags: increment current version
+              NEXT_PATCH=$((CURRENT_PATCH + 1))
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
+              echo "::notice::Patch mode: no previous tags, incrementing current version from $CURRENT_MAJOR.$CURRENT_MINOR.$CURRENT_PATCH to $VERSION_SHORT"
+            elif [ "$CURRENT_MAJOR" -gt "$LATEST_MAJOR" ]; then
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+              echo "::notice::Patch mode: new major version, resetting patch to 0"
+            elif [ "$CURRENT_MINOR" -gt "$LATEST_MINOR" ]; then
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+              echo "::notice::Patch mode: new minor version, resetting patch to 0"
+            else
+              # Same major.minor as latest: increment patch
+              NEXT_PATCH=$((CURRENT_PATCH + 1))
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
+              echo "::notice::Patch mode: same major.minor, incrementing current patch from $CURRENT_PATCH to $NEXT_PATCH"
+            fi
+          else
+            # Non-patch mode: always use current version as-is
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+            echo "::notice::Non-patch mode: using current version as-is ($VERSION_SHORT)"
           fi
-
-          VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
-          echo "::notice::Non-patch mode: using current version as-is"
         fi
 
         VERSION="${VERSION_SHORT}${POSTFIX}"

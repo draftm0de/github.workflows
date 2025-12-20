@@ -9,6 +9,7 @@ Builds and validates semantic version tags based on a current version and the la
 | `target-branch` | Target branch name (e.g., `main`, `develop`) | Yes | - |
 | `current-version` | Current version with optional postfix (e.g., `v1.0.1+1`, `1.0.1`) | Yes | - |
 | `patch` | Enable patch mode to auto-increment patch version | No | `'false'` |
+| `ci-tag-source` | Version source type (`nodejs`, `flutter`, `branch`). Affects versioning behavior. | No | `''` |
 
 ## Outputs
 
@@ -62,14 +63,19 @@ Builds and validates semantic version tags based on a current version and the la
 - Prevents version drift by checking major, minor, and patch components
 
 **Patch Mode (`patch: 'true'`)**
+
+For `ci-tag-source: nodejs/flutter`:
+- Always increments patch from current file version
+
+For `ci-tag-source: branch` (or empty):
 - New major version: Resets patch to `0`
 - New minor version: Resets patch to `0`
-- Current patch > latest patch: Uses current patch
-- Current patch ≤ latest patch: Increments patch from latest tag
+- No existing tags: Increments patch from current version
+- Same major.minor: Increments patch from current version
 
 **Non-Patch Mode (`patch: 'false'`)**
-- Uses the current version as-is
-- Validates that it's not a duplicate or older than the latest tag
+- Always uses the current version as-is
+- No validation against git tags
 
 **Postfix Handling**
 - Postfixes (e.g., `+build-123`) are preserved in `next-version`
@@ -82,15 +88,15 @@ Builds and validates semantic version tags based on a current version and the la
 
 ## Example Scenarios
 
-| Latest Tag | Current Version | Patch Mode | Result | Notes |
-|------------|-----------------|------------|--------|-------|
-| `v1.2.3` | `v1.2.4` | `false` | `v1.2.4` | Uses current as-is |
-| `v1.2.3` | `v1.2.5` | `true` | `v1.2.5` | Current patch > latest, uses current |
-| `v1.2.3` | `v1.2.0` | `true` | `v1.2.4` | Current patch < latest, auto-increments |
-| `v1.2.3` | `v1.3.0` | `true` | `v1.3.0` | New minor, patch reset to 0 |
-| `v1.2.3` | `v2.0.0` | `true` | `v2.0.0` | New major, patch reset to 0 |
-| `v1.2.3` | `v1.2.3` | `false` | ERROR | Duplicate version |
-| `v0.0.0` | `v1.0.1` | `true` | `v1.0.1` | Current patch > latest, uses current |
+| ci-tag-source | Latest Tag | Current Version | Patch Mode | Result | Notes |
+|---------------|------------|-----------------|------------|--------|-------|
+| (any) | (any) | `v1.2.4` | `false` | `v1.2.4` | Non-patch always uses current |
+| `nodejs` | (any) | `v1.0.1` | `true` | `v1.0.2` | File-based: increment from file |
+| `flutter` | (any) | `v2.3.5` | `true` | `v2.3.6` | File-based: increment from file |
+| `branch` | `v1.2.3` | `v1.2.0` | `true` | `v1.2.1` | Git-based: increment from current |
+| `branch` | `v1.2.3` | `v1.3.0` | `true` | `v1.3.0` | New minor, patch reset to 0 |
+| `branch` | `v1.2.3` | `v2.0.0` | `true` | `v2.0.0` | New major, patch reset to 0 |
+| `branch` | `v0.0.0` | `v1.0.1` | `true` | `v1.0.2` | No tags, increment from current |
 
 ## Notes
 

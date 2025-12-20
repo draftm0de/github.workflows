@@ -152,6 +152,7 @@ jobs:
           target-branch: ${{ needs.setup.outputs.target-branch-name }}
           current-version: ${{ steps.current-version.outputs.version }}
           patch: ${{ inputs.ci-tag-increment-patch }}
+          ci-tag-source: ${{ inputs.ci-tag-source }}
 
       - name: Create docker tags
         id: docker-tags
@@ -162,7 +163,6 @@ jobs:
           is-latest-version: ${{ steps.version.outputs.is-latest-version }}
           tag-levels: ${{ inputs.docker-tag-levels }}
           git-tag-levels: ${{ inputs.git-tag-levels }}
-          ci-tag-source: ${{ inputs.ci-tag-source }}
 
       - name: Create git tags
         id: git-tags
