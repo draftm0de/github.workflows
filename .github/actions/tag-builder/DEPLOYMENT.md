@@ -59,8 +59,12 @@ Default to `0.0.0` if no tags exist.
 ### 5. Build Next Version
 
 **Patch Mode (`patch: true`):**
-- New major/minor → Use current major.minor, set patch to `0`
-- Same major.minor → Use current major.minor, set patch to `latest.patch + 1`
+
+Check conditions in order:
+1. If `current.major > latest.major` → Use `current.major.minor.0` (new major, reset patch)
+2. If `current.minor > latest.minor` → Use `current.major.minor.0` (new minor, reset patch)
+3. If `current.patch > latest.patch` → Use `current.major.minor.patch` (current is ahead, use it)
+4. Else → Use `current.major.minor.(latest.patch + 1)` (auto-increment)
 
 **Non-Patch Mode (`patch: false`):**
 - Use current version as-is

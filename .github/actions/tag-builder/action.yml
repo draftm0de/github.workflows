@@ -222,6 +222,9 @@ runs:
           elif [ "$CURRENT_MINOR" -gt "$LATEST_MINOR" ]; then
             VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
             echo "::notice::Patch mode: new minor version, setting patch to 0"
+          elif [ "$CURRENT_PATCH" -gt "$LATEST_PATCH" ]; then
+            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+            echo "::notice::Patch mode: current patch ($CURRENT_PATCH) is newer than latest ($LATEST_PATCH), using current"
           else
             NEXT_PATCH=$((LATEST_PATCH + 1))
             VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"

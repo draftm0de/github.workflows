@@ -62,8 +62,10 @@ Builds and validates semantic version tags based on a current version and the la
 - Prevents version drift by checking major, minor, and patch components
 
 **Patch Mode (`patch: 'true'`)**
-- New major/minor version: Resets patch to `0`
-- Same major.minor: Increments patch from latest tag
+- New major version: Resets patch to `0`
+- New minor version: Resets patch to `0`
+- Current patch > latest patch: Uses current patch
+- Current patch ≤ latest patch: Increments patch from latest tag
 
 **Non-Patch Mode (`patch: 'false'`)**
 - Uses the current version as-is
@@ -80,13 +82,15 @@ Builds and validates semantic version tags based on a current version and the la
 
 ## Example Scenarios
 
-| Latest Tag | Current Version | Patch Mode | Result |
-|------------|-----------------|------------|--------|
-| `v1.2.3` | `v1.2.4` | `false` | `v1.2.4` |
-| `v1.2.3` | `v1.2.0` | `true` | `v1.2.4` (auto-incremented) |
-| `v1.2.3` | `v1.3.0` | `true` | `v1.3.0` (patch reset to 0) |
-| `v1.2.3` | `v2.0.0` | `true` | `v2.0.0` (patch reset to 0) |
-| `v1.2.3` | `v1.2.3` | `false` | ERROR (duplicate) |
+| Latest Tag | Current Version | Patch Mode | Result | Notes |
+|------------|-----------------|------------|--------|-------|
+| `v1.2.3` | `v1.2.4` | `false` | `v1.2.4` | Uses current as-is |
+| `v1.2.3` | `v1.2.5` | `true` | `v1.2.5` | Current patch > latest, uses current |
+| `v1.2.3` | `v1.2.0` | `true` | `v1.2.4` | Current patch < latest, auto-increments |
+| `v1.2.3` | `v1.3.0` | `true` | `v1.3.0` | New minor, patch reset to 0 |
+| `v1.2.3` | `v2.0.0` | `true` | `v2.0.0` | New major, patch reset to 0 |
+| `v1.2.3` | `v1.2.3` | `false` | ERROR | Duplicate version |
+| `v0.0.0` | `v1.0.1` | `true` | `v1.0.1` | Current patch > latest, uses current |
 
 ## Notes
 
