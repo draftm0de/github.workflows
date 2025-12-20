@@ -120,14 +120,16 @@ Write summary to `$GITHUB_STEP_SUMMARY` showing target branch, latest tag, globa
 
 ## Examples
 
-| Latest Tag | Current | Patch | Output next-version-short | Notes                      |
-|------------|---------|-------|---------------------------|----------------------------|
-| v1.2.3     | v1.2.4  | false | v1.2.4                    | Simple increment           |
-| v1.2.3     | v1.2.0  | true  | v1.2.4                    | Auto-increment from latest |
-| v1.2.3     | v1.3.0  | true  | v1.3.0                    | New minor, patch reset     |
-| v1.2.3     | v2.0.0  | true  | v2.0.0                    | New major, patch reset     |
-| v1.2.3     | v1.2.3  | false | ERROR                     | Duplicate not allowed      |
-| (none)     | v1.0.0  | false | v1.0.0                    | First tag                  |
+| Latest Tag | Current | Patch | Output next-version-short | Notes                         |
+|------------|---------|-------|---------------------------|-------------------------------|
+| v1.2.3     | v1.2.4  | false | v1.2.4                    | Simple increment              |
+| v1.2.3     | v1.2.5  | true  | v1.2.5                    | Current > latest, use current |
+| v1.2.3     | v1.2.0  | true  | v1.2.4                    | Current < latest, increment   |
+| v1.2.3     | v1.3.0  | true  | v1.3.0                    | New minor, patch reset        |
+| v1.2.3     | v2.0.0  | true  | v2.0.0                    | New major, patch reset        |
+| v1.2.3     | v1.2.3  | false | ERROR                     | Duplicate not allowed         |
+| v0.0.0     | v1.0.1  | true  | v1.0.1                    | Current > latest, use current |
+| (none)     | v1.0.0  | false | v1.0.0                    | First tag                     |
 
 ## Use Case: Latest Version Detection
 

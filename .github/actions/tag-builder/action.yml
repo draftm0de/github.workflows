@@ -217,11 +217,21 @@ runs:
 
         if [[ "$PATCH_MODE" == "true" ]]; then
           if [ "$CURRENT_MAJOR" -gt "$LATEST_MAJOR" ]; then
-            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
-            echo "::notice::Patch mode: new major version, setting patch to 0"
+            if [ "$CURRENT_PATCH" -gt 0 ]; then
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+              echo "::notice::Patch mode: new major version with patch $CURRENT_PATCH, using current"
+            else
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+              echo "::notice::Patch mode: new major version, setting patch to 0"
+            fi
           elif [ "$CURRENT_MINOR" -gt "$LATEST_MINOR" ]; then
-            VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
-            echo "::notice::Patch mode: new minor version, setting patch to 0"
+            if [ "$CURRENT_PATCH" -gt 0 ]; then
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
+              echo "::notice::Patch mode: new minor version with patch $CURRENT_PATCH, using current"
+            else
+              VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.0"
+              echo "::notice::Patch mode: new minor version, setting patch to 0"
+            fi
           elif [ "$CURRENT_PATCH" -gt "$LATEST_PATCH" ]; then
             VERSION_SHORT="${PREFIX}${CURRENT_MAJOR}.${CURRENT_MINOR}.${CURRENT_PATCH}"
             echo "::notice::Patch mode: current patch ($CURRENT_PATCH) is newer than latest ($LATEST_PATCH), using current"
