@@ -72,6 +72,7 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - `ci-tag-increment-patch` automatically increments patch version when major.minor match the latest tag.
 - `git-tag-levels` controls which git tags are created (default: `'patch'` for exact version only).
 - Multi-level tags (`minor`, `major`) are automatically filtered if covered by version-like branches (e.g., `v1.2` branch skips `v1.2` multi-level tag).
+- **Important**: When `docker-tag-levels` contains semantic versions (`patch`, `minor`, or `major`), `git-tag-levels` MUST include `'patch'` to maintain version consistency across git and Docker registry. This prevents version drift across builds.
 
 **Docker:**
 - Docker jobs only run when `docker-image-name` is provided.
@@ -210,6 +211,8 @@ This means:
 2. Read current version using `version-reader` action
 3. Build next version using `tag-builder` action
 4. Create docker tags (if `docker-tag-levels` provided) using `docker-tag-builder` action
+   - Validates tag level consistency when `git-tag-levels` is also provided
+   - Ensures semantic docker levels are subset of git levels
 5. Create git tags (if `git-tag-levels` provided) using `git-tag-builder` action
 
 **Outputs**:
@@ -514,3 +517,4 @@ This workflow uses the following actions from the same repository:
 - Full git history (`fetch-depth: 0`) is required for version comparison in tagging jobs
 - The workflow uses composite actions, making it easy to test and maintain individual components
 - Git tags and Docker images are pushed only on `push` events to release branches (configured via `ci-release-branch-patterns`)
+- **Tag Level Validation**: The `docker-tag-builder` action validates that semantic docker tag levels (`patch`, `minor`, `major`) are a subset of git tag levels. This ensures version consistency between git tags and Docker registry, preventing version drift where Docker images have semantic versions but git repository doesn't track them. For example, if you use `docker-tag-levels: 'latest,major,minor'`, then `git-tag-levels` must include both `'major'` and `'minor'`. Custom docker tags (`sha`, `edge`, `beta`, `latest`) are ignored in validation.

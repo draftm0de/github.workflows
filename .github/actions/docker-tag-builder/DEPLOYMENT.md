@@ -12,6 +12,7 @@ Builds Docker image tags based on optional version and global latest version det
 - `version`: Optional version to tag (format: `[v]X.Y.Z[+postfix]`). Required for `major`, `minor`, `patch` levels.
 - `is-latest-version`: Boolean indicating if this is globally latest
 - `tag-levels`: Comma-separated levels: `patch`, `minor`, `major`, `latest`, or custom tags (default: `patch`)
+- `git-tag-levels`: Optional git tag levels. When provided, validates semantic docker levels are subset of git levels.
 
 **Outputs:**
 - `docker-tags`: Space-separated list of tags
@@ -20,7 +21,33 @@ Builds Docker image tags based on optional version and global latest version det
 
 ## Implementation Steps
 
-### 1. Parse and Validate Version (if provided)
+### 1. Validate Tag Level Consistency (if git-tag-levels provided)
+
+**If `git-tag-levels` is provided:**
+- Split `tag-levels` by comma into array
+- For each docker tag level:
+  - Trim whitespace
+  - Check if level is semantic: `patch`, `minor`, or `major`
+  - If semantic: verify it exists in `git-tag-levels` using regex: `(^|,)$level(,|$)`
+  - If not found in git levels:
+    - Log error with details: docker level, current docker-tag-levels, current git-tag-levels
+    - Exit 1
+  - If not semantic (custom tag or `latest`): skip validation
+- Log success notice if all semantic levels validated
+
+**If `git-tag-levels` is empty:**
+- Log notice: "No git-tag-levels provided, skipping consistency validation"
+- Continue to next step
+
+**Error messages:**
+```
+::error::Docker tag level '{level}' must be included in git-tag-levels to maintain version consistency.
+::error::Current docker tag-levels: {docker-tag-levels}
+::error::Current git-tag-levels: {git-tag-levels}
+::error::Fix: Add '{level}' to git-tag-levels (e.g., git-tag-levels: '{level}' or git-tag-levels: 'patch,minor,major')
+```
+
+### 2. Parse and Validate Version (if provided)
 
 **If `version` is provided:**
 - Extract components from `version`:
@@ -35,7 +62,7 @@ Builds Docker image tags based on optional version and global latest version det
 - Set all version variables to empty
 - Continue (will fail if semantic levels requested)
 
-### 2. Process Tag Levels
+### 3. Process Tag Levels
 
 Parse `tag-levels` input (comma-separated) and build tags list:
 
@@ -60,7 +87,7 @@ Parse `tag-levels` input (comma-separated) and build tags list:
 - If semantic level (`major`, `minor`, `patch`) requested without version: Exit 1
 - If no tags generated: Exit 1
 
-### 3. Build Output
+### 4. Build Output
 
 Combine all tags into space-separated string:
 - Format: `tag1 tag2 tag3`
@@ -111,6 +138,13 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
 
 ## Key Behaviors
 
+**Tag Level Validation:**
+- Optional validation when `git-tag-levels` provided
+- Ensures semantic docker levels (`patch`, `minor`, `major`) are subset of git levels
+- Custom tags (`sha`, `edge`, `beta`) and `latest` are ignored in validation
+- Prevents version drift between git repository and Docker registry
+- Validation runs before any tag building
+
 **Space-Separated Output:**
 - Easy to iterate in bash loops
 - Compatible with Docker tag commands
@@ -134,6 +168,7 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
 
 ## Error Conditions
 
+- Docker semantic level not in git-tag-levels (when git-tag-levels provided) → Exit 1
 - Invalid version format (when provided) → Exit 1
 - Semantic level (`major`, `minor`, `patch`) without version → Exit 1
 - No tags generated → Exit 1
@@ -145,19 +180,30 @@ Write summary to `$GITHUB_STEP_SUMMARY` including:
 
 ## Integration Examples
 
-### Semantic Version Tags
+### Semantic Version Tags with Git Validation
 
 ```yaml
 # Step 1: Build version
 - uses: tag-builder
   outputs: next-version-short, is-latest-version
 
-# Step 2: Build Docker tags
+# Step 2: Build Docker tags (with git validation)
 - uses: docker-tag-builder
-  inputs: version, is-latest-version, tag-levels
+  inputs:
+    version: {version}
+    is-latest-version: {is-latest}
+    tag-levels: 'patch,minor,major'
+    git-tag-levels: 'patch,minor,major'
   outputs: docker-tags
 
-# Step 3: Use tags for Docker
+# Step 3: Build git tags
+- uses: git-tag-builder
+  inputs:
+    version: {version}
+    target-branch: {branch}
+    git-tag-levels: 'patch,minor,major'
+
+# Step 4: Use tags for Docker
 - run: |
     for tag in $docker-tags; do
       docker tag image:build image:$tag

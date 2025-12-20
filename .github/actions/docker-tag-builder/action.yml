@@ -12,6 +12,9 @@ inputs:
     description: "Tag levels: patch, minor, major, latest, or custom tags (e.g., sha, edge, beta). Comma-separated."
     required: false
     default: 'patch'
+  git-tag-levels:
+    description: "Git tag levels (optional). When provided, validates that semantic docker tag levels are subset of git tag levels."
+    required: false
 
 outputs:
   docker-tags:
@@ -27,6 +30,37 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Validate tag level consistency
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        DOCKER_LEVELS="${{ inputs.tag-levels }}"
+        GIT_LEVELS="${{ inputs.git-tag-levels }}"
+
+        if [ -z "$GIT_LEVELS" ]; then
+          echo "::notice::No git-tag-levels provided, skipping consistency validation"
+          exit 0
+        fi
+
+        IFS=',' read -ra DOCKER_ARRAY <<< "$DOCKER_LEVELS"
+
+        for level in "${DOCKER_ARRAY[@]}"; do
+          level=$(echo "$level" | xargs)
+
+          if [[ "$level" == "patch" || "$level" == "minor" || "$level" == "major" ]]; then
+            if [[ ! "$GIT_LEVELS" =~ (^|,)$level(,|$) ]]; then
+              echo "::error::Docker tag level '$level' must be included in git-tag-levels to maintain version consistency."
+              echo "::error::Current docker tag-levels: $DOCKER_LEVELS"
+              echo "::error::Current git-tag-levels: $GIT_LEVELS"
+              echo "::error::Fix: Add '$level' to git-tag-levels (e.g., git-tag-levels: '$level' or git-tag-levels: 'patch,minor,major')"
+              exit 1
+            fi
+          fi
+        done
+
+        echo "::notice::Tag level consistency validated successfully"
+
     - name: Build Docker tags
       id: build
       shell: bash

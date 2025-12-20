@@ -9,6 +9,7 @@ Builds Docker image tags based on version and latest version detection. Supports
 | `version`           | Version to tag (e.g., `v1.2.12`, `1.2.12`). Required for `major`/`minor`/`patch` levels. | No       | -        |
 | `is-latest-version` | Whether this is the latest version globally (`true`/`false`) | Yes      | -         |
 | `tag-levels`        | Tag levels: `patch`, `minor`, `major`, `latest`, or custom tags (e.g., `sha`, `edge`, `beta`). Comma-separated. | No | `'patch'` |
+| `git-tag-levels`    | Git tag levels (optional). When provided, validates that semantic docker tag levels (`patch`, `minor`, `major`) are subset of git tag levels. | No | - |
 
 ## Outputs
 
@@ -20,7 +21,7 @@ Builds Docker image tags based on version and latest version detection. Supports
 
 ## Usage
 
-### With Tag Builder
+### With Tag Builder and Git Tag Validation
 
 ```yaml
 - name: Build next version
@@ -38,6 +39,15 @@ Builds Docker image tags based on version and latest version detection. Supports
     version: ${{ steps.tag_builder.outputs.next-version-short }}
     is-latest-version: ${{ steps.tag_builder.outputs.is-latest-version }}
     tag-levels: 'patch,minor'
+    git-tag-levels: 'patch,minor,major'
+
+- name: Build git tags
+  id: git_tags
+  uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
+  with:
+    version: ${{ steps.tag_builder.outputs.next-version-short }}
+    target-branch: v1.2
+    git-tag-levels: 'patch,minor,major'
 
 - name: Build and push Docker image
   run: |
@@ -146,6 +156,22 @@ Control which tags to create using `tag-levels` (comma-separated):
 | `sha,edge` | (none) | `false` | `sha edge` | Custom tags only |
 | `patch,sha` | `v1.2.12` | `false` | `v1.2.12 sha` | Mixed semantic + custom |
 
+## Tag Level Validation
+
+When `git-tag-levels` is provided, the action validates that semantic docker tag levels are tracked in git:
+
+**Rule**: Docker semantic tag levels (`patch`, `minor`, `major`) must be a subset of git tag levels.
+
+**Examples:**
+- `tag-levels: 'latest,major,minor'` + `git-tag-levels: 'major,minor'` ✅
+- `tag-levels: 'patch,latest'` + `git-tag-levels: 'patch'` ✅
+- `tag-levels: 'minor'` + `git-tag-levels: 'patch'` ❌ (git doesn't include `minor`)
+- `tag-levels: 'latest,sha,edge'` + `git-tag-levels: ''` ✅ (no semantic docker tags)
+
+**Why**: Ensures git repository tracks at least the same version granularity as Docker registry, preventing version drift.
+
+**Note**: Custom tags (`sha`, `edge`, `beta`, `latest`) are ignored in validation.
+
 ## Notes
 
 - Output is space-separated for easy use with Docker tag commands
@@ -155,4 +181,5 @@ Control which tags to create using `tag-levels` (comma-separated):
 - `version` is required only for `major`, `minor`, `patch` levels
 - Custom tag levels (non-semantic) are passed through as-is
 - Action fails if `major`/`minor`/`patch` requested without `version`
+- `git-tag-levels` is optional - when omitted, no validation is performed
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

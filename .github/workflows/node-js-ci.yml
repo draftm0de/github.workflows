@@ -161,6 +161,7 @@ jobs:
           version: ${{ steps.version.outputs.next-version-short }}
           is-latest-version: ${{ steps.version.outputs.is-latest-version }}
           tag-levels: ${{ inputs.docker-tag-levels }}
+          git-tag-levels: ${{ inputs.git-tag-levels }}
 
       - name: Create git tags
         id: git-tags
