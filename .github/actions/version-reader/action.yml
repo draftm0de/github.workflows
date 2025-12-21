@@ -5,8 +5,8 @@ inputs:
   type:
     description: "Source type to read version from. Supported values: nodejs, flutter, target"
     required: true
-  target-branch-name:
-    description: "Target branch name to read latest tag from (required when type=target)"
+  branch:
+    description: "Branch name to read latest tag from (required when type=target)"
     required: true
 
 outputs:
@@ -16,6 +16,12 @@ outputs:
   version-short:
     description: "Clean semantic version without postfix (e.g., v1.0.1, 1.0.1)"
     value: ${{ steps.read.outputs.version_short }}
+  title:
+    description: "Project title from package.json name field (nodejs only)"
+    value: ${{ steps.read.outputs.title }}
+  description:
+    description: "Project description from package.json description field (nodejs only)"
+    value: ${{ steps.read.outputs.description }}
 
 runs:
   using: "composite"
@@ -36,23 +42,27 @@ runs:
             exit 1
           fi
 
-          VERSION=$(node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const version = (pkg.version || '').toString().trim();
-            if (!version) {
-              console.error('No version field found in package.json');
-              process.exit(1);
-            }
-            console.log(version);
-          " 2>&1)
+          VERSION=$(jq -r '.version // empty' package.json)
 
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to read version from package.json: $VERSION"
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version field found in package.json"
             exit 1
           fi
 
+          TITLE=$(jq -r '.name // empty' package.json)
+          DESCRIPTION=$(jq -r '.description // empty' package.json)
+
           echo "::notice::Read version from package.json: $VERSION"
+
+          if [ -n "$TITLE" ]; then
+            echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+            echo "::notice::Read title from package.json: $TITLE"
+          fi
+
+          if [ -n "$DESCRIPTION" ]; then
+            echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+            echo "::notice::Read description from package.json: $DESCRIPTION"
+          fi
 
         elif [[ "$TYPE" == "flutter" ]]; then
           echo "::notice::Reading version from pubspec.yaml"
@@ -74,20 +84,20 @@ runs:
         elif [[ "$TYPE" == "target" ]]; then
           echo "::notice::Reading latest version tag from target branch"
 
-          TARGET_BRANCH="${{ inputs.target-branch-name }}"
+          BRANCH="${{ inputs.branch }}"
 
-          if [[ -z "$TARGET_BRANCH" ]]; then
-            echo "::error::target-branch-name input is required when type=target"
+          if [[ -z "$BRANCH" ]]; then
+            echo "::error::branch input is required when type=target"
             exit 1
           fi
 
-          echo "::notice::Target branch: $TARGET_BRANCH"
+          echo "::notice::Branch: $BRANCH"
 
           git fetch --tags --force >/dev/null 2>&1 || true
 
           LATEST_TAG=""
-          if git rev-parse "origin/$TARGET_BRANCH" >/dev/null 2>&1; then
-            RAW_TAGS=$(git tag --merged "origin/$TARGET_BRANCH" 2>/dev/null || true)
+          if git rev-parse "origin/$BRANCH" >/dev/null 2>&1; then
+            RAW_TAGS=$(git tag --merged "origin/$BRANCH" 2>/dev/null || true)
 
             SEMVER_TAGS=""
             if [ -n "$RAW_TAGS" ]; then
@@ -109,10 +119,10 @@ runs:
             if [ -n "$SEMVER_TAGS" ]; then
               LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
               # Get the original tag to preserve prefix and postfix
-              LATEST_TAG=$(git tag --merged "origin/$TARGET_BRANCH" | grep -E "^[vV]?${LATEST_BASE}" | head -n1)
+              LATEST_TAG=$(git tag --merged "origin/$BRANCH" | grep -E "^[vV]?${LATEST_BASE}" | head -n1)
             fi
           else
-            echo "::warning::Target branch origin/$TARGET_BRANCH not found"
+            echo "::warning::Branch origin/$BRANCH not found"
           fi
 
           if [ -z "$LATEST_TAG" ]; then
@@ -153,7 +163,7 @@ runs:
           echo "### version-reader"
           echo "- CI tag source: $TYPE"
           if [[ "$TYPE" == "target" ]]; then
-            echo "- Target branch: $TARGET_BRANCH"
+            echo "- Branch: $BRANCH"
           fi
           echo "- Version: $VERSION"
           echo "- Version Short: $VERSION_SHORT"

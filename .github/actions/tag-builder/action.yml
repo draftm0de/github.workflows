@@ -2,8 +2,8 @@ name: tag-builder
 description: Build version tags from current version and target branch while validating and handling patch mode.
 
 inputs:
-  target-branch:
-    description: "Target branch name (e.g. main)"
+  branch:
+    description: "Branch name (e.g. main)"
     required: true
   current-version:
     description: "Current version with optional postfix (e.g. v1.0.1+1 or v1.0.1)"
@@ -69,14 +69,14 @@ runs:
       run: |
         set -euo pipefail
 
-        TARGET_BRANCH="${{ inputs.target-branch }}"
+        BRANCH="${{ inputs.branch }}"
         PREFIX="${{ steps.parse.outputs.prefix }}"
 
         git fetch --tags --force >/dev/null 2>&1 || true
 
         LATEST_TAG=""
-        if git rev-parse "origin/$TARGET_BRANCH" >/dev/null 2>&1; then
-          RAW_TAGS=$(git tag --merged "origin/$TARGET_BRANCH" 2>/dev/null || true)
+        if git rev-parse "origin/$BRANCH" >/dev/null 2>&1; then
+          RAW_TAGS=$(git tag --merged "origin/$BRANCH" 2>/dev/null || true)
 
           SEMVER_TAGS=""
           if [ -n "$RAW_TAGS" ]; then
@@ -295,8 +295,8 @@ runs:
 
         {
           echo "### tag-builder"
-          echo "- Target branch: \`${{ inputs.target-branch }}\`"
-          echo "- Latest target tag: \`${{ steps.latest.outputs.latest_tag }}\`"
+          echo "- Branch: \`${{ inputs.branch }}\`"
+          echo "- Latest branch tag: \`${{ steps.latest.outputs.latest_tag }}\`"
           echo "- Global latest tag: \`${{ steps.global.outputs.global_latest_base }}\`"
           echo "- Current version: \`${{ inputs.current-version }}\`"
           echo "- Patch mode: \`$PATCH_MODE\`"

@@ -22,6 +22,15 @@ inputs:
   build-args-file:
     description: Relative path (from context) to a KEY=VALUE file consumed as --build-arg entries
     required: false
+  version:
+    description: Image version for org.opencontainers.image.version label
+    required: false
+  title:
+    description: Human-readable title for org.opencontainers.image.title label
+    required: false
+  description:
+    description: Human-readable description for org.opencontainers.image.description label
+    required: false
 
 outputs:
   digest:
@@ -79,6 +88,33 @@ runs:
         if [ -n "${{ inputs.target }}" ]; then
           echo "> target: ${{ inputs.target }}"
           build_options="$build_options --target ${{ inputs.target }}"
+        fi
+
+        # Add OCI labels
+        BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        build_options="$build_options --label org.opencontainers.image.created=$BUILD_TIMESTAMP"
+        echo "> label: org.opencontainers.image.created=$BUILD_TIMESTAMP"
+
+        build_options="$build_options --label org.opencontainers.image.revision=${{ github.sha }}"
+        echo "> label: org.opencontainers.image.revision=${{ github.sha }}"
+
+        REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+        build_options="$build_options --label org.opencontainers.image.source=$REPO_URL"
+        echo "> label: org.opencontainers.image.source=$REPO_URL"
+
+        if [ -n "${{ inputs.version }}" ]; then
+          build_options="$build_options --label org.opencontainers.image.version=${{ inputs.version }}"
+          echo "> label: org.opencontainers.image.version=${{ inputs.version }}"
+        fi
+
+        if [ -n "${{ inputs.title }}" ]; then
+          build_options="$build_options --label org.opencontainers.image.title=${{ inputs.title }}"
+          echo "> label: org.opencontainers.image.title=${{ inputs.title }}"
+        fi
+
+        if [ -n "${{ inputs.description }}" ]; then
+          build_options="$build_options --label org.opencontainers.image.description=${{ inputs.description }}"
+          echo "> label: org.opencontainers.image.description=${{ inputs.description }}"
         fi
 
         echo "> context: $context"

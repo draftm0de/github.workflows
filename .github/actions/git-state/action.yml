@@ -20,6 +20,9 @@ outputs:
   target-branch-name:
     description: "Target/base branch name (GITHUB_BASE_REF for PR events, empty for push events)"
     value: ${{ steps.out.outputs.target-branch-name }}
+  ci-branch-name:
+    description: "Branch name for CI operations (target branch for PRs, source branch for push events)"
+    value: ${{ steps.out.outputs.ci-branch-name }}
 
 runs:
   using: "composite"
@@ -62,6 +65,7 @@ runs:
           echo "has-open-pull-requests=true" >> "$GITHUB_OUTPUT"
           echo "source-branch-name=$GITHUB_HEAD_REF" >> "$GITHUB_OUTPUT"
           echo "target-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "ci-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
           {
             echo "### git-state"
             echo "- Event type: \`pull_request\`"
@@ -84,6 +88,7 @@ runs:
 
         echo "source-branch-name=$BRANCH" >> "$GITHUB_OUTPUT"
         echo "target-branch-name=" >> "$GITHUB_OUTPUT"
+        echo "ci-branch-name=$BRANCH" >> "$GITHUB_OUTPUT"
         echo "is-release-branch=$IS_RELEASE_BRANCH" >> "$GITHUB_OUTPUT"        
         
         # Count open PRs for this branch (same-repo branches)

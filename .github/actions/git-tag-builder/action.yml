@@ -5,8 +5,8 @@ inputs:
   version:
     description: "Version to tag (e.g., v1.2.12, 1.2.12)"
     required: true
-  target-branch:
-    description: "Target branch name (e.g., main, v1.2, develop)"
+  branch:
+    description: "Branch name (e.g., main, v1.2, develop)"
     required: true
   enable-branch-tag:
     description: "Enable branch-level tagging when branch name is version-like (default: true)"
@@ -38,7 +38,7 @@ runs:
         set -euo pipefail
 
         VERSION="${{ inputs.version }}"
-        TARGET_BRANCH="${{ inputs.target-branch }}"
+        BRANCH="${{ inputs.branch }}"
         ENABLE_BRANCH_TAG="${{ inputs.enable-branch-tag }}"
         TAG_LEVELS="${{ inputs.git-tag-levels }}"
 
@@ -73,14 +73,14 @@ runs:
         BRANCH_COVERS_MINOR="false"
 
         if [[ "$ENABLE_BRANCH_TAG" == "true" ]]; then
-          if [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ "$BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
             BRANCH_MAJOR="${BASH_REMATCH[2]}"
             BRANCH_MINOR="${BASH_REMATCH[3]}"
             if [ "$BRANCH_MAJOR" == "$MAJOR" ] && [ "$BRANCH_MINOR" == "$MINOR" ]; then
               BRANCH_COVERS_MAJOR="true"
               BRANCH_COVERS_MINOR="true"
             fi
-          elif [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
+          elif [[ "$BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
             BRANCH_MAJOR="${BASH_REMATCH[2]}"
             if [ "$BRANCH_MAJOR" == "$MAJOR" ]; then
               BRANCH_COVERS_MAJOR="true"
@@ -135,7 +135,7 @@ runs:
         BRANCH_TAG=""
         if [[ "$ENABLE_BRANCH_TAG" == "true" ]]; then
           # Check if target branch name is version-like (e.g., v1.2, 1.2, v1)
-          if [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ "$BRANCH" =~ ^([vV]?)([0-9]+)\.([0-9]+)$ ]]; then
             # Branch is major.minor format (e.g., v1.2)
             BRANCH_PREFIX="${BASH_REMATCH[1]}"
             BRANCH_MAJOR="${BASH_REMATCH[2]}"
@@ -155,7 +155,7 @@ runs:
             else
               echo "::notice::Branch version ($BRANCH_MAJOR.$BRANCH_MINOR) does not match current version ($MAJOR.$MINOR), skipping branch tag"
             fi
-          elif [[ "$TARGET_BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
+          elif [[ "$BRANCH" =~ ^([vV]?)([0-9]+)$ ]]; then
             # Branch is major-only format (e.g., v1)
             BRANCH_PREFIX="${BASH_REMATCH[1]}"
             BRANCH_MAJOR="${BASH_REMATCH[2]}"
@@ -175,7 +175,7 @@ runs:
               echo "::notice::Branch version ($BRANCH_MAJOR) does not match current version ($MAJOR), skipping branch tag"
             fi
           else
-            echo "::notice::Branch name '$TARGET_BRANCH' is not version-like, skipping branch tag"
+            echo "::notice::Branch name '$BRANCH' is not version-like, skipping branch tag"
           fi
         fi
 
@@ -185,7 +185,7 @@ runs:
 
         {
           echo "### git-tag-builder"
-          echo "- Target branch: \`$TARGET_BRANCH\`"
+          echo "- Branch: \`$BRANCH\`"
           echo "- Tag levels: \`$TAG_LEVELS\`"
           if [ -n "$BRANCH_TAG" ]; then
             echo "- Branch tag: \`$BRANCH_TAG\`"
