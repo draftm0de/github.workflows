@@ -139,10 +139,10 @@ runs:
         options="${{ steps.arguments.outputs.build_options }}"
         if [ "${{ inputs.reproducible }}" = 'true' ]; then
           echo "> using docker buildx for reproducible build"
-          SOURCE_DATE_EPOCH=0 docker buildx build --no-cache --output type=docker,rewrite-timestamp=true $options
+          eval "SOURCE_DATE_EPOCH=0 docker buildx build --no-cache --output type=docker,rewrite-timestamp=true $options"
         else
           echo "> using docker build"
-          docker build $options
+          eval "docker build $options"
         fi
 
         tag="${{ steps.arguments.outputs.tag }}"
