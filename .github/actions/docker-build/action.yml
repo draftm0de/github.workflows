@@ -103,17 +103,17 @@ runs:
         echo "> label: org.opencontainers.image.source=$REPO_URL"
 
         if [ -n "${{ inputs.image-version }}" ]; then
-          build_options="$build_options --label \"org.opencontainers.image.version=${{ inputs.image-version }}\""
+          build_options="$build_options --label \\\"org.opencontainers.image.version=${{ inputs.image-version }}\\\""
           echo "> label: org.opencontainers.image.version=${{ inputs.image-version }}"
         fi
 
         if [ -n "${{ inputs.image-title }}" ]; then
-          build_options="$build_options --label \"org.opencontainers.image.title=${{ inputs.image-title }}\""
+          build_options="$build_options --label \\\"org.opencontainers.image.title=${{ inputs.image-title }}\\\""
           echo "> label: org.opencontainers.image.title=${{ inputs.image-title }}"
         fi
 
         if [ -n "${{ inputs.image-description }}" ]; then
-          build_options="$build_options --label \"org.opencontainers.image.description=${{ inputs.image-description }}\""
+          build_options="$build_options --label \\\"org.opencontainers.image.description=${{ inputs.image-description }}\\\""
           echo "> label: org.opencontainers.image.description=${{ inputs.image-description }}"
         fi
 
