@@ -90,13 +90,17 @@ runs:
                 TAG_PATCH="${BASH_REMATCH[4]}"
 
                 TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
-                SEMVER_TAGS+="$TAG_BASE\n"
+                if [ -z "$SEMVER_TAGS" ]; then
+                  SEMVER_TAGS="$TAG_BASE"
+                else
+                  SEMVER_TAGS="$SEMVER_TAGS"$'\n'"$TAG_BASE"
+                fi
               fi
             done <<< "$RAW_TAGS"
           fi
 
           if [ -n "$SEMVER_TAGS" ]; then
-            LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1 | tr -d '\n\r')
+            LATEST_BASE=$(echo "$SEMVER_TAGS" | sort -V | tail -n1)
             LATEST_TAG="${PREFIX}${LATEST_BASE}"
           fi
         fi
@@ -146,14 +150,18 @@ runs:
               TAG_PATCH="${BASH_REMATCH[4]}"
 
               TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
-              GLOBAL_SEMVER_TAGS+="$TAG_BASE\n"
+              if [ -z "$GLOBAL_SEMVER_TAGS" ]; then
+                GLOBAL_SEMVER_TAGS="$TAG_BASE"
+              else
+                GLOBAL_SEMVER_TAGS="$GLOBAL_SEMVER_TAGS"$'\n'"$TAG_BASE"
+              fi
             fi
           done <<< "$ALL_TAGS"
         fi
 
         GLOBAL_LATEST_BASE="0.0.0"
         if [ -n "$GLOBAL_SEMVER_TAGS" ]; then
-          GLOBAL_LATEST_BASE=$(printf '%s\n' "$GLOBAL_SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1 | tr -d '\n\r')
+          GLOBAL_LATEST_BASE=$(echo "$GLOBAL_SEMVER_TAGS" | sort -V | tail -n1)
         fi
 
         # Parse global latest
