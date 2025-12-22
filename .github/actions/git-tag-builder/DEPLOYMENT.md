@@ -4,13 +4,13 @@ Technical reference for rebuilding the git-tag-builder action.
 
 ## Overview
 
-Creates git tags based on version and target branch. Supports exact version tags and optional branch-level floating tags.
+Creates git tags based on version and branch. Supports exact version tags and optional branch-level floating tags.
 
 ## Inputs & Outputs
 
 **Inputs:**
 - `version`: Version to tag (format: `[v]X.Y.Z[+postfix]`)
-- `target-branch`: Branch name (e.g., `main`, `v1.2`)
+- `branch`: Branch name (e.g., `main`, `v1.2`)
 - `enable-branch-tag`: Enable branch tagging (default: `true`)
 - `git-tag-levels`: Comma-separated levels (default: `''` - empty/none)
 
@@ -34,7 +34,7 @@ Exit with error if format is invalid.
 
 ### 2. Check Version-Like Branch Coverage
 
-Determine if the target branch is version-like and which tag levels it covers:
+Determine if the branch is version-like and which tag levels it covers:
 - Branch `v1.2` matching version `1.2.X` → covers major AND minor
 - Branch `v1` matching version `1.X.X` → covers major only
 - Branch `main` or non-matching → covers nothing
@@ -95,7 +95,7 @@ Output to `$GITHUB_OUTPUT`:
 - `branch_tag`: The branch tag (or empty)
 - `git_tags`: Space-separated list of both
 
-Write summary to `$GITHUB_STEP_SUMMARY` showing target branch, exact tag, branch tag, and all created tags.
+Write summary to `$GITHUB_STEP_SUMMARY` showing branch, exact tag, branch tag, and all created tags.
 
 ## Key Behaviors
 
@@ -139,7 +139,7 @@ Write summary to `$GITHUB_STEP_SUMMARY` showing target branch, exact tag, branch
 
 **Scenario: Multi-level tags with version branch**
 ```
-Input: version=v1.2.12, target-branch=v1.2, levels=patch,minor,major
+Input: version=v1.2.12, branch=v1.2, levels=patch,minor,major
 → Calculate exact tag: v1.2.12
 → Branch is version-like: v1.2 (covers major + minor)
 → Skip minor tag (covered by branch)
@@ -150,7 +150,7 @@ Input: version=v1.2.12, target-branch=v1.2, levels=patch,minor,major
 
 **Scenario: Multi-level tags without version branch**
 ```
-Input: version=v1.2.12, target-branch=main, levels=patch,minor,major
+Input: version=v1.2.12, branch=main, levels=patch,minor,major
 → Calculate exact tag: v1.2.12
 → Branch is not version-like
 → Add minor tag: v1.2
@@ -160,7 +160,7 @@ Input: version=v1.2.12, target-branch=main, levels=patch,minor,major
 
 **Scenario: Default (patch only)**
 ```
-Input: version=v1.2.12, target-branch=main, levels=patch
+Input: version=v1.2.12, branch=main, levels=patch
 → Calculate exact tag: v1.2.12
 → Branch is not version-like
 → No multi-level tags requested

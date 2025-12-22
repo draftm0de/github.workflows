@@ -4,12 +4,12 @@ Technical reference for rebuilding the tag-builder action.
 
 ## Overview
 
-Builds semantic version tags by comparing a current version against the latest tag from a target branch. Supports automatic patch increments and prevents version drift.
+Builds semantic version tags by comparing a current version against the latest tag from a branch. Supports automatic patch increments and prevents version drift.
 
 ## Inputs & Outputs
 
 **Inputs:**
-- `target-branch`: Branch to fetch latest tag from
+- `branch`: Branch to fetch latest tag from
 - `current-version`: Version to build (format: `[v]X.Y.Z[+postfix]`)
 - `patch`: Enable auto-increment patch mode (default: `false`)
 
@@ -33,7 +33,7 @@ Exit with error if format is invalid.
 
 ### 2. Discover Latest Tag from Target Branch
 
-Fetch tags with `git tag --merged origin/{target-branch}`.
+Fetch tags with `git tag --merged origin/{branch}`.
 
 Filter for semantic versions matching the pattern, sort by version number (not chronological), and select the highest.
 
@@ -86,7 +86,7 @@ Output to `$GITHUB_OUTPUT`:
 - `next_version_short`: Version without postfix
 - `is_latest_version`: Boolean (`true`/`false`)
 
-Write summary to `$GITHUB_STEP_SUMMARY` showing target branch, latest tag, global latest, current version, patch mode, built versions, and is-latest flag.
+Write summary to `$GITHUB_STEP_SUMMARY` showing branch, latest tag, global latest, current version, patch mode, built versions, and is-latest flag.
 
 ## Key Behaviors
 

@@ -23,7 +23,7 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `node-version-env`  | string  | No       | `''`    | Path to env file exporting `NODE_VERSION` (e.g., `.env.build`). Overrides `node-version` when provided. |
 | `enable-cache`      | boolean | No       | `true`  | Enable npm caching in `actions/setup-node`. Requires `package-lock.json` to be committed. |
 | `lint-script`       | string  | No       | `''`    | npm script to run linting (e.g., `lint`). Leave blank to skip. |
-| `prettier-script`   | string  | No       | `''`    | npm script to run Prettier in check mode (e.g., `format:check`). Leave blank to skip. |
+| `format-script`     | string  | No       | `''`    | npm script to run code formatting check (e.g., `format:check`). Leave blank to skip. |
 | `badges-script`     | string  | No       | `''`    | npm script to refresh README/coverage badges. Leave blank to skip. |
 | `test-script`       | string  | No       | `''`    | npm script to run test suite (e.g., `test`, `test:ci`). Leave blank to skip. |
 
@@ -422,7 +422,7 @@ jobs:
     with:
       node-version: '20'
       lint-script: 'lint'
-      prettier-script: 'format:check'
+      format-script: 'format:check'
       test-script: 'test:ci'
       ci-release-branch-patterns: 'main,release/*'
       ci-tag-source: 'nodejs'

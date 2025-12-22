@@ -8,6 +8,10 @@ inputs:
   new-version:
     description: "New version to write (e.g., 1.2.4, v1.2.4)"
     required: true
+  push:
+    description: "Push changes to remote branch (default: false)"
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -74,15 +78,8 @@ runs:
 
         echo "version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
 
-        {
-          echo "### version-patch"
-          echo "- Source type: \`$SOURCE\`"
-          echo "- New version: \`$CLEAN_VERSION\`"
-          echo "- File updated: \`${{ steps.update.outputs.file }}\`"
-        } >> "$GITHUB_STEP_SUMMARY"
-
     - name: Commit and push version update
-      if: steps.update.outputs.file != ''
+      if: steps.update.outputs.file != '' && inputs.push == 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -110,3 +107,10 @@ runs:
         git push origin HEAD
 
         echo "::notice::Successfully committed and pushed version update to $VERSION"
+
+        {
+          echo "### version-patch"
+          echo "- Source type: \`${{ inputs.ci-tag-source }}\`"
+          echo "- New version: \`$VERSION\`"
+          echo "- File updated: \`$FILE\`"
+        } >> "$GITHUB_STEP_SUMMARY"

@@ -1,12 +1,12 @@
 # Tag Builder Action
 
-Builds and validates semantic version tags based on a current version and the latest tag from a target branch. Prevents version drift and supports automatic patch increments.
+Builds and validates semantic version tags based on a current version and the latest tag from a branch. Prevents version drift and supports automatic patch increments.
 
 ## Inputs
 
 | Name | Description | Required | Default |
 |------|-------------|----------|---------|
-| `target-branch` | Target branch name (e.g., `main`, `develop`) | Yes | - |
+| `branch` | Target branch name (e.g., `main`, `develop`) | Yes | - |
 | `current-version` | Current version with optional postfix (e.g., `v1.0.1+1`, `1.0.1`) | Yes | - |
 | `patch` | Enable patch mode to auto-increment patch version | No | `'false'` |
 | `ci-tag-source` | Version source type (`nodejs`, `flutter`, `branch`). Affects versioning behavior. | No | `''` |
@@ -28,7 +28,7 @@ Builds and validates semantic version tags based on a current version and the la
   id: tag_builder
   uses: draftm0de/github.workflows/.github/actions/tag-builder@main
   with:
-    target-branch: main
+    branch: main
     current-version: v1.2.3
     patch: 'false'
 
@@ -45,7 +45,7 @@ Builds and validates semantic version tags based on a current version and the la
   id: tag_builder
   uses: draftm0de/github.workflows/.github/actions/tag-builder@main
   with:
-    target-branch: main
+    branch: main
     current-version: v1.2.3+build-123
     patch: 'true'
 
@@ -59,7 +59,7 @@ Builds and validates semantic version tags based on a current version and the la
 ## How It Works
 
 **Version Validation**
-- Ensures the current version is not older than the latest tag on the target branch
+- Ensures the current version is not older than the latest tag on the branch
 - Prevents version drift by checking major, minor, and patch components
 
 **Patch Mode (`patch: 'true'`)**
@@ -82,7 +82,7 @@ For `ci-tag-source: branch` (or empty):
 - Postfixes are stripped in `next-version-short`
 
 **Latest Version Detection**
-- Compares the built version against all tags in the repository (not just target branch)
+- Compares the built version against all tags in the repository (not just branch)
 - Returns `true` if the built version is greater than any existing tag globally
 - Useful for conditional Docker image tagging with `:latest`
 

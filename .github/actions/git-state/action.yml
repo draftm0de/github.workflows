@@ -68,11 +68,11 @@ runs:
           echo "ci-branch-name=$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
           {
             echo "### git-state"
-            echo "- Event type: \`pull_request\`"
             echo "- Is release branch: \`$IS_RELEASE_BRANCH\`"
             echo "- Has open pull requests: \`true\`"
             echo "- Source branch: \`$GITHUB_HEAD_REF\`"
             echo "- Target branch: \`$GITHUB_BASE_REF\`"
+            echo "- Ci branch: \`$GITHUB_BASE_REF\`"
           } >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi 
@@ -119,9 +119,9 @@ runs:
 
         {
           echo "### git-state"
-          echo "- Event type: \`push\`"
           echo "- Is release branch: \`$IS_RELEASE_BRANCH\`"
           echo "- Has open pull requests: \`$HAS_PR\`"
           echo "- Source branch: \`$BRANCH\`"
           echo "- Target branch: \`-\`"
+          echo "- Ci branch: \`$BRANCH\`"
         } >> "$GITHUB_STEP_SUMMARY"

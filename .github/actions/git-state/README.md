@@ -26,6 +26,7 @@ For most use cases, the default `GITHUB_TOKEN` is sufficient. If you need elevat
 | `has-open-pull-requests`  | `'true'` when an open PR exists for the current branch during push events, `'false'` when no PR exists. Always `'true'` for PR events. |
 | `source-branch-name`      | The source branch name. For PR events, this is `GITHUB_HEAD_REF`. For push events, this is `GITHUB_REF_NAME`. |
 | `target-branch-name`      | The target/base branch name. For PR events, this is `GITHUB_BASE_REF`. For push events, this is empty. |
+| `ci-branch-name`          | The branch name for CI operations. For PR events, this is the target branch (`GITHUB_BASE_REF`). For push events, this is the source branch (`GITHUB_REF_NAME`). |
 
 ## Usage
 
@@ -114,6 +115,7 @@ When the workflow is triggered by a `pull_request` event:
    - `has-open-pull-requests='true'` (always true for PR events)
    - `source-branch-name=$GITHUB_HEAD_REF`
    - `target-branch-name=$GITHUB_BASE_REF`
+   - `ci-branch-name=$GITHUB_BASE_REF`
 5. The action exits immediately (no API calls needed)
 
 ### Push Events
@@ -127,6 +129,7 @@ When the workflow is triggered by a `push` event:
    - `is-release-branch='true'` (if branch matches patterns) or `'false'`
    - `source-branch-name=$GITHUB_REF_NAME`
    - `target-branch-name=''` (empty)
+   - `ci-branch-name=$GITHUB_REF_NAME`
 5. The action queries the GitHub API to count open PRs for the current branch:
    - Uses GraphQL API via `gh api graphql`
    - Queries `repository.pullRequests(states:OPEN, headRefName:$branch).totalCount`

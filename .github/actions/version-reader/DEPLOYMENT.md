@@ -5,8 +5,8 @@ This document provides the pseudo-code logic for the version-reader action to al
 ## Action Structure
 
 ### Inputs
-- `type`: Required. Values: `nodejs` | `flutter` | `target`
-- `target-branch-name`: Required when type=target
+- `type`: Required. Values: `nodejs` | `flutter` | `branch`
+- `branch`: Required when type=branch
 
 ### Outputs
 - `version`: Full version with optional postfix (e.g., `v1.0.1+1`)
@@ -21,18 +21,18 @@ IF type == "nodejs" THEN
     CALL read_nodejs_version()
 ELSIF type == "flutter" THEN
     CALL read_flutter_version()
-ELSIF type == "target" THEN
-    CALL read_target_branch_version()
+ELSIF type == "branch" THEN
+    CALL read_branch_version()
 ELSE
     ERROR "Unsupported type: {type}"
-    SUPPORTED_TYPES = ["nodejs", "flutter", "target"]
+    SUPPORTED_TYPES = ["nodejs", "flutter", "branch"]
     EXIT 1
 END IF
 
 CALL validate_version_pattern(VERSION)
 CALL extract_version_short(VERSION)
 CALL output_results(VERSION, VERSION_SHORT)
-CALL write_step_summary(TYPE, VERSION, VERSION_SHORT, TARGET_BRANCH)
+CALL write_step_summary(TYPE, VERSION, VERSION_SHORT, BRANCH)
 ```
 
 ### read_nodejs_version()
@@ -90,27 +90,27 @@ FUNCTION read_flutter_version():
 END FUNCTION
 ```
 
-### read_target_branch_version()
+### read_branch_version()
 
 ```
-FUNCTION read_target_branch_version():
-    TARGET_BRANCH = input.target-branch-name
+FUNCTION read_branch_version():
+    BRANCH = input.branch
 
-    IF TARGET_BRANCH is empty THEN
-        ERROR "target-branch-name input is required when type=target"
+    IF BRANCH is empty THEN
+        ERROR "branch input is required when type=branch"
         EXIT 1
     END IF
 
-    NOTICE "Reading latest version tag from target branch"
-    NOTICE "Target branch: {TARGET_BRANCH}"
+    NOTICE "Reading latest version tag from branch"
+    NOTICE "Branch: {BRANCH}"
 
     # Fetch tags quietly
     git fetch --tags --force (suppress output)
 
     LATEST_TAG = ""
 
-    IF git rev-parse "origin/{TARGET_BRANCH}" exists THEN
-        RAW_TAGS = git tag --merged "origin/{TARGET_BRANCH}"
+    IF git rev-parse "origin/{BRANCH}" exists THEN
+        RAW_TAGS = git tag --merged "origin/{BRANCH}"
 
         SEMVER_TAGS = []
         FOR EACH TAG in RAW_TAGS DO
@@ -132,15 +132,15 @@ FUNCTION read_target_branch_version():
             LATEST_TAG = find first tag matching "^[vV]?{LATEST_BASE}"
         END IF
     ELSE
-        WARNING "Target branch origin/{TARGET_BRANCH} not found"
+        WARNING "Branch origin/{BRANCH} not found"
     END IF
 
     IF LATEST_TAG is empty THEN
         VERSION = "0.0.0"
-        NOTICE "No tags found on target branch, using default: {VERSION}"
+        NOTICE "No tags found on branch, using default: {VERSION}"
     ELSE
         VERSION = LATEST_TAG
-        NOTICE "Latest tag from target branch: {VERSION}"
+        NOTICE "Latest tag from branch: {VERSION}"
     END IF
 
     RETURN VERSION
@@ -191,13 +191,13 @@ END FUNCTION
 ### write_step_summary()
 
 ```
-FUNCTION write_step_summary(TYPE, VERSION, VERSION_SHORT, TARGET_BRANCH):
+FUNCTION write_step_summary(TYPE, VERSION, VERSION_SHORT, BRANCH):
     APPEND to GITHUB_STEP_SUMMARY:
         "### version-reader"
         "- Type: {TYPE}"
 
         IF TYPE == "target" THEN
-            "- Target branch: {TARGET_BRANCH}"
+            "- Branch: {BRANCH}"
         END IF
 
         "- Version: {VERSION}"
@@ -240,8 +240,8 @@ END FUNCTION
 - Version doesn't match pattern → EXIT 1
 
 ### Type: target
-- `target-branch-name` not provided → EXIT 1
-- Target branch not found → WARNING, default to `0.0.0`
+- `branch` not provided → EXIT 1
+- Branch not found → WARNING, default to `0.0.0`
 - No valid tags found → default to `0.0.0`
 
 ### General

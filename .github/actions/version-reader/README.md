@@ -1,13 +1,13 @@
 # Version Reader Action
 
-Reads version information from Node.js package.json, Flutter pubspec.yaml, or from the latest git tag on a target branch.
+Reads version information from Node.js package.json, Flutter pubspec.yaml, or from the latest git tag on a branch.
 
 ## Inputs
 
 | Name | Description | Required |
 |------|-------------|----------|
-| `type` | Source type: `nodejs`, `flutter`, or `target` | Yes |
-| `target-branch-name` | Target branch name to read latest tag from (required when `type=target`) | Yes |
+| `type` | Source type: `nodejs`, `flutter`, or `branch` | Yes |
+| `branch` | Branch name to read latest tag from (required when `type=branch`) | Yes |
 
 ## Outputs
 
@@ -38,7 +38,7 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
     type: flutter
 ```
 
-### Reading from target branch
+### Reading from branch tags
 
 ```yaml
 - uses: actions/checkout@v4
@@ -49,8 +49,8 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
   id: version
   uses: draftm0de/github.workflows/.github/actions/version-reader@main
   with:
-    type: target
-    target-branch-name: main
+    type: branch
+    branch: main
 ```
 
 ## How It Works
@@ -63,8 +63,8 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
 - Reads the `version` field from `pubspec.yaml` in the repository root
 - Returns the version as-is from the file
 
-**Type: target**
-- Fetches all git tags from the target branch
+**Type: branch**
+- Fetches all git tags from the specified branch
 - Returns the latest semantic version tag
 - Defaults to `0.0.0` if no tags found
 
@@ -73,11 +73,11 @@ Both types preserve the `v` prefix and handle postfixes (e.g., `+build`) by prov
 ## Use Cases
 
 - Read version from package.json for tagging or releases
-- Get the latest version from a target branch for version bumping
+- Get the latest version from a branch for version bumping
 - Works great with feature branches that don't have version information
 
 ## Notes
 
-- For `type: target`, use `fetch-depth: 0` to fetch all tags
+- For `type: branch`, use `fetch-depth: 0` to fetch all tags
 - Supported version formats: `v1.0.1`, `1.0.1`, `v1.0.1+build`, `1.0.1+build`
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed implementation logic

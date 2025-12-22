@@ -24,8 +24,8 @@ on:
         description: "npm script to run test suite (leave blank to skip)"
         required: false
         type: string
-      prettier-script:
-        description: "npm script to run Prettier in check mode (leave blank to skip)"
+      format-script:
+        description: "npm script to run code formatting check (leave blank to skip)"
         required: false
         type: string
       badges-script:
@@ -198,7 +198,7 @@ jobs:
           node-version-env: ${{ inputs.node-version-env }}
           enable-cache: ${{ inputs.enable-cache }}
           lint-script: ${{ inputs.lint-script }}
-          prettier-script: ${{ inputs.prettier-script }}
+          format-script: ${{ inputs.format-script }}
           badges-script: ${{ inputs.badges-script }}
           test-script: ${{ inputs.test-script }}
 
@@ -221,6 +221,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Update Version File
+        if: |
+          inputs.ci-tag-source != '' &&
+          inputs.ci-tag-increment-patch == true
+        uses: draftm0de/github.workflows/.github/actions/version-patch@main
+        with:
+          ci-tag-source: ${{ inputs.ci-tag-source }}
+          new-version: ${{ needs.auto_tagging.outputs.next-version-short }}
 
       - name: Build docker image
         uses: draftm0de/github.workflows/.github/actions/docker-build@main
@@ -266,6 +275,7 @@ jobs:
         with:
           ci-tag-source: ${{ inputs.ci-tag-source }}
           new-version: ${{ needs.auto_tagging.outputs.next-version-short }}
+          push: true
 
   # general job to create and push git tags (only on push to release branch)
   git_push:
@@ -273,7 +283,8 @@ jobs:
     if: |
       github.event_name == 'push' &&
       needs.setup.outputs.is-release-branch == 'true' &&
-      needs.auto_tagging.outputs.git-tags != ''
+      needs.auto_tagging.outputs.git-tags != '' &&
+      (needs.version_update.result == 'success' || needs.version_update.result == 'skipped')
     runs-on: ubuntu-latest
     needs:
       - setup

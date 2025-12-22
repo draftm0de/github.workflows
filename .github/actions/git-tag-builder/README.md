@@ -1,13 +1,13 @@
 # Git Tag Builder Action
 
-Creates git tags based on version and target branch. Supports exact version tags and optional branch-level tags for version-like branches.
+Creates git tags based on version and branch. Supports exact version tags and optional branch-level tags for version-like branches.
 
 ## Inputs
 
 | Name                | Description                                                                                                                                       | Required | Default   |
 |---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------|
 | `version`           | Version to tag (e.g., `v1.2.12`, `1.2.12`)                                                                                                        | Yes      | -         |
-| `target-branch`     | Target branch name (e.g., `main`, `v1.2`, `develop`)                                                                                              | Yes      | -         |
+| `branch`     | Target branch name (e.g., `main`, `v1.2`, `develop`)                                                                                              | Yes      | -         |
 | `enable-branch-tag` | Enable branch-level tagging when branch is version-like                                                                                           | No       | `'true'`  |
 | `git-tag-levels`    | Comma-separated tag levels: `patch`, `minor`, `major` (e.g., `'patch,minor,major'`). Filters out levels already covered by version-like branches. | No       | `''` (none) |
 
@@ -29,7 +29,7 @@ Creates git tags based on version and target branch. Supports exact version tags
   uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
   with:
     version: v1.2.12
-    target-branch: main
+    branch: main
     git-tag-levels: 'patch,minor,major'
 
 - name: Push tags
@@ -44,7 +44,7 @@ Creates git tags based on version and target branch. Supports exact version tags
   id: tag_builder
   uses: draftm0de/github.workflows/.github/actions/tag-builder@main
   with:
-    target-branch: v1.2
+    branch: v1.2
     current-version: v1.2.11
     patch: 'true'
 
@@ -53,7 +53,7 @@ Creates git tags based on version and target branch. Supports exact version tags
   uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
   with:
     version: ${{ steps.tag_builder.outputs.next-version-short }}
-    target-branch: v1.2
+    branch: v1.2
 
 - name: Push tags
   run: |
@@ -67,7 +67,7 @@ Creates git tags based on version and target branch. Supports exact version tags
   uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
   with:
     version: v1.2.12
-    target-branch: main
+    branch: main
     git-tag-levels: 'patch'
 ```
 
@@ -78,7 +78,7 @@ Creates git tags based on version and target branch. Supports exact version tags
   uses: draftm0de/github.workflows/.github/actions/git-tag-builder@main
   with:
     version: v1.2.12
-    target-branch: v1.2
+    branch: v1.2
     git-tag-levels: 'patch,minor,major'
 ```
 Result: Creates `v1.2.12` and `v1.2` (branch tag). Major tag `v1` is skipped because `v1.2` branch already covers minor level.
