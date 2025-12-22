@@ -4,7 +4,6 @@ Composite action that builds a Docker image (optionally using Buildx for reprodu
 
 ## Features
 - Supports multi-stage targets, additional CLI flags, and build-arg files
-- Multi-platform builds (e.g., `linux/amd64,linux/arm64`) for cross-architecture support
 - Optional reproducible builds (`reproducible: 'true'`) leverage `docker/setup-buildx-action` with deterministic timestamps
 - Automatic OCI labels for image metadata (version, title, description, source, revision)
 - Produces both the canonical tag and the resulting digest so you can chain into push/publish steps or save the image with [`artifact-from-image`](../artifact-from-image)
@@ -17,7 +16,6 @@ Composite action that builds a Docker image (optionally using Buildx for reprodu
 | `context`         | Build context directory.                                                                   | No       | `.`       |
 | `reproducible`    | Set to `'true'` to enable Buildx reproducible builds.                                      | No       | `'false'` |
 | `options`         | Extra CLI flags appended verbatim (for example `--no-cache`).                              | No       | —         |
-| `platform`        | Target platform(s) for build (e.g., `linux/amd64`, `linux/arm64`, `linux/amd64,linux/arm64`). | No       | —         |
 | `build-args-file` | File relative to `context` containing `KEY=VALUE` pairs that become `--build-arg` entries. | No       | —         |
 | `image-version`         | Image version for `org.opencontainers.image.version` label.                                | No       | —         |
 | `image-title`           | Human-readable title for `org.opencontainers.image.title` label.                          | No       | —         |
@@ -43,34 +41,12 @@ jobs:
           build-args-file: build.args
           options: --no-cache
           reproducible: 'true'
-          platform: 'linux/amd64,linux/arm64'
           image-version: '1.2.3'
           image-title: 'My Application'
           image-description: 'A sample application'
 ```
 
 Follow-up jobs can reuse the `image` + `digest` outputs directly (for example to push with `docker login && docker push ${{ needs.build.outputs.image }}`), or choose to serialize the image by running [`artifact-from-image`](../artifact-from-image) with the emitted `image` tag.
-
-## Multi-Platform Builds
-
-To build images for multiple architectures (e.g., AMD64 and ARM64):
-
-```yaml
-- name: Build multi-platform image
-  uses: draftm0de/github.workflows/.github/actions/docker-build@main
-  with:
-    image: ghcr.io/draftm0de/app:latest
-    platform: 'linux/amd64,linux/arm64'
-    reproducible: 'true'
-```
-
-**Note:** Multi-platform builds require `reproducible: 'true'` as they use Docker Buildx.
-
-Common platform values:
-- `linux/amd64` - x86-64 (standard Linux/Windows servers)
-- `linux/arm64` - ARM 64-bit (Apple Silicon, AWS Graviton, Raspberry Pi 4+)
-- `linux/arm/v7` - ARM 32-bit (older Raspberry Pi)
-- `linux/amd64,linux/arm64` - Multi-arch (both Intel and ARM)
 
 ## OCI Labels
 

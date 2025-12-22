@@ -50,7 +50,6 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `docker-build-args-file`   | string  | No       | `''`            | Path to file with Docker build args. Leave blank to skip. |
 | `docker-build-options`     | string  | No       | `'--no-cache'`  | Additional Docker build options. |
 | `docker-build-reproducible`| boolean | No       | `true`          | Build reproducible Docker image with `SOURCE_DATE_EPOCH`. |
-| `docker-build-platform`    | string  | No       | `''`            | Target platform(s) for Docker build (e.g., `'linux/amd64'`, `'linux/amd64,linux/arm64'`). |
 | `docker-tag-levels`        | string  | No       | `'patch,latest'`| Version levels to tag: `patch`, `minor`, `major`, `latest` (comma-separated). |
 | `docker-registry`          | string  | No       | `'ghcr.io'`     | Docker registry URL (e.g., `'ghcr.io'`). Leave blank for Docker Hub. |
 | `docker-registry-username` | string  | No       | `''`            | Docker registry username. If not provided, extracted from `docker-image-name` (e.g., `myuser/myapp` → `myuser`). |
@@ -81,7 +80,6 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - `docker-build-args-file` is optional - provide path to a file containing build args (one per line, format: `ARG=value`).
 - `docker-build-options` defaults to `--no-cache` for clean builds.
 - `docker-build-reproducible` uses `SOURCE_DATE_EPOCH` from git commit timestamp for reproducible builds.
-- `docker-build-platform` enables multi-platform builds (e.g., `'linux/amd64,linux/arm64'`). Leave blank for default platform. Requires `docker-build-reproducible: true`.
 - `docker-tag-levels` controls which version tags to create (defaults to `patch,latest`).
 - `docker-registry` defaults to GitHub Container Registry (`ghcr.io`).
 - `docker-registry-username` is inferred from `docker-image-name` if not provided (e.g., `myuser/myapp` → username: `myuser`).

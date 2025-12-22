@@ -69,10 +69,6 @@ on:
         required: false
         type: boolean
         default: true
-      docker-build-platform:
-        description: "Target platform(s) for Docker build (e.g., 'linux/amd64', 'linux/arm64', 'linux/amd64,linux/arm64')"
-        required: false
-        type: string
       docker-tag-levels:
         description: "Version levels to tag: patch, minor, major, latest (comma-separated)"
         required: false
@@ -245,7 +241,6 @@ jobs:
           build-args-file: ${{ inputs.docker-build-args-file }}
           options: ${{ inputs.docker-build-options }}
           reproducible: ${{ inputs.docker-build-reproducible }}
-          platform: ${{ inputs.docker-build-platform }}
           # for docker labels
           image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}
           image-title: ${{ needs.auto_tagging.outputs.source-title || '' }}
