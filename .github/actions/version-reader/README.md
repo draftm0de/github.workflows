@@ -15,6 +15,8 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
 |------|-------------|
 | `version` | Full version with optional postfix (e.g., `v1.0.1+1`) |
 | `version-short` | Version without postfix (e.g., `v1.0.1`) |
+| `source-title` | Project title from package.json name field (nodejs only) |
+| `source-description` | Project description from package.json description field (nodejs only) |
 
 ## Usage
 
@@ -57,10 +59,14 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
 
 **Type: nodejs**
 - Reads the `version` field from `package.json` in the repository root
+- Reads the `name` field as `source-title` output
+- Reads the `description` field as `source-description` output
 - Returns the version as-is from the file
 
 **Type: flutter**
 - Reads the `version` field from `pubspec.yaml` in the repository root
+- Reads `meta.title` as `source-title` output (if present)
+- Reads `meta.description` as `source-description` output (if present)
 - Returns the version as-is from the file
 
 **Type: branch**
@@ -72,7 +78,8 @@ Both types preserve the `v` prefix and handle postfixes (e.g., `+build`) by prov
 
 ## Use Cases
 
-- Read version from package.json for tagging or releases
+- Read version from package.json or pubspec.yaml for tagging or releases
+- Extract project metadata (title, description) for Docker labels or documentation
 - Get the latest version from a branch for version bumping
 - Works great with feature branches that don't have version information
 

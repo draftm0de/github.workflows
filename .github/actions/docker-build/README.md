@@ -16,9 +16,9 @@ Composite action that builds a Docker image (optionally using Buildx for reprodu
 | `options`         | Extra CLI flags appended verbatim (for example `--no-cache`).                              | No       | —         |
 | `build-args-file` | File relative to `context` containing `KEY=VALUE` pairs that become `--build-arg` entries. | No       | —         |
 | `reproducible`    | Set to `'true'` to enable Buildx reproducible builds.                                      | No       | `'false'` |
-| `version`         | Image version for `org.opencontainers.image.version` label.                                | No       | —         |
-| `title`           | Human-readable title for `org.opencontainers.image.title` label.                          | No       | —         |
-| `description`     | Description for `org.opencontainers.image.description` label.                              | No       | —         |
+| `image-version`         | Image version for `org.opencontainers.image.version` label.                                | No       | —         |
+| `image-title`           | Human-readable title for `org.opencontainers.image.title` label.                          | No       | —         |
+| `image-description`     | Description for `org.opencontainers.image.description` label.                              | No       | —         |
 
 ## Outputs
 | Name     | Description                                                                               |
@@ -40,9 +40,9 @@ jobs:
           build-args-file: build.args
           options: --no-cache
           reproducible: 'true'
-          version: '1.2.3'
-          title: 'My Application'
-          description: 'A sample application'
+          image-version: '1.2.3'
+          image-title: 'My Application'
+          image-description: 'A sample application'
 ```
 
 Follow-up jobs can reuse the `image` + `digest` outputs directly (for example to push with `docker login && docker push ${{ needs.build.outputs.image }}`), or choose to serialize the image by running [`artifact-from-image`](../artifact-from-image) with the emitted `image` tag.
@@ -57,8 +57,8 @@ The action automatically adds the following [OCI Image Spec](https://github.com/
 - `org.opencontainers.image.source` - Repository URL (`github.server_url/github.repository`)
 
 **Optional (when inputs provided):**
-- `org.opencontainers.image.version` - Version string (from `version` input)
-- `org.opencontainers.image.title` - Human-readable title (from `title` input)
-- `org.opencontainers.image.description` - Description (from `description` input)
+- `org.opencontainers.image.version` - Version string (from `image-version` input)
+- `org.opencontainers.image.title` - Human-readable title (from `image-title` input)
+- `org.opencontainers.image.description` - Description (from `image-description` input)
 
 These labels help with image inspection, auditing, and tool integration (e.g., `docker inspect`, security scanners).

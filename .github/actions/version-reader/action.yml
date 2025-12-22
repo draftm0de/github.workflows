@@ -16,12 +16,12 @@ outputs:
   version-short:
     description: "Clean semantic version without postfix (e.g., v1.0.1, 1.0.1)"
     value: ${{ steps.read.outputs.version_short }}
-  title:
+  source-title:
     description: "Project title from package.json name field (nodejs only)"
-    value: ${{ steps.read.outputs.title }}
-  description:
+    value: ${{ steps.read.outputs.source-title }}
+  source-description:
     description: "Project description from package.json description field (nodejs only)"
-    value: ${{ steps.read.outputs.description }}
+    value: ${{ steps.read.outputs.source-description }}
 
 runs:
   using: "composite"
@@ -55,12 +55,12 @@ runs:
           echo "::notice::Read version from package.json: $VERSION"
 
           if [ -n "$TITLE" ]; then
-            echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+            echo "source-title=$TITLE" >> "$GITHUB_OUTPUT"
             echo "::notice::Read title from package.json: $TITLE"
           fi
 
           if [ -n "$DESCRIPTION" ]; then
-            echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+            echo "source-description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
             echo "::notice::Read description from package.json: $DESCRIPTION"
           fi
 
@@ -79,7 +79,20 @@ runs:
             exit 1
           fi
 
+          TITLE=$(yq eval '.meta.title // ""' pubspec.yaml 2>/dev/null || true)
+          DESCRIPTION=$(yq eval '.meta.description // ""' pubspec.yaml 2>/dev/null || true)
+
           echo "::notice::Read version from pubspec.yaml: $VERSION"
+
+          if [ -n "$TITLE" ]; then
+            echo "source-title=$TITLE" >> "$GITHUB_OUTPUT"
+            echo "::notice::Read title from pubspec.yaml: $TITLE"
+          fi
+
+          if [ -n "$DESCRIPTION" ]; then
+            echo "source-description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+            echo "::notice::Read description from pubspec.yaml: $DESCRIPTION"
+          fi
 
         elif [[ "$TYPE" == "branch" ]]; then
           echo "::notice::Reading latest version tag from ci branch"
@@ -167,4 +180,6 @@ runs:
           fi
           echo "- Version: $VERSION"
           echo "- Version Short: $VERSION_SHORT"
+          echo "- Meta Title: $TITLE"
+          echo "- Meta Description: $DESCRIPTION"
         } >> "$GITHUB_STEP_SUMMARY"

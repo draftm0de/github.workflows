@@ -134,8 +134,8 @@ jobs:
       docker-tags: ${{ steps.docker-tags.outputs.docker-tags || '' }}
       git-tags: ${{ steps.git-tags.outputs.git-tags || '' }}
       # for further descriptions, e.g. for docker labels
-      title: ${{ steps.current-version.outputs.title }}
-      description: ${{ steps.current-version.outputs.description }}
+      source-title: ${{ steps.current-version.outputs.title }}
+      source-description: ${{ steps.current-version.outputs.description }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -214,6 +214,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - setup
+      - auto_tagging
       - tests
     outputs:
       image: ${{ steps.build.outputs.image }}
@@ -241,9 +242,9 @@ jobs:
           options: ${{ inputs.docker-build-options }}
           reproducible: ${{ inputs.docker-build-reproducible }}
           # for docker labels
-          version: ${{ needs.auto_tagging.outputs.next-version-short }}
-          title: ${{ needs.auto_tagging.outputs.title }}
-          description: ${{ needs.auto_tagging.outputs.description }}
+          image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}
+          image-title: ${{ needs.auto_tagging.outputs.source-title || '' }}
+          image-description: ${{ needs.auto_tagging.outputs.source-description || '' }}
 
       - name: Upload docker image to artifact
         id: upload

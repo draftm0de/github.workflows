@@ -11,6 +11,8 @@ This document provides the pseudo-code logic for the version-reader action to al
 ### Outputs
 - `version`: Full version with optional postfix (e.g., `v1.0.1+1`)
 - `version-short`: Version without postfix (e.g., `v1.0.1`)
+- `source-title`: Project title from package.json name field (nodejs only)
+- `source-description`: Project description from package.json description field (nodejs only)
 
 ## Implementation Logic
 
@@ -44,23 +46,28 @@ FUNCTION read_nodejs_version():
         EXIT 1
     END IF
 
-    VERSION = node -e "
-        const fs = require('fs');
-        const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-        const version = (pkg.version || '').toString().trim();
-        if (!version) {
-            console.error('No version field found in package.json');
-            process.exit(1);
-        }
-        console.log(version);
-    "
+    VERSION = jq -r '.version // empty' package.json
 
-    IF node command failed THEN
-        ERROR "Failed to read version from package.json"
+    IF VERSION is empty THEN
+        ERROR "No version field found in package.json"
         EXIT 1
     END IF
 
+    TITLE = jq -r '.name // empty' package.json
+    DESCRIPTION = jq -r '.description // empty' package.json
+
     NOTICE "Read version from package.json: {VERSION}"
+
+    IF TITLE is not empty THEN
+        OUTPUT "title={TITLE}"
+        NOTICE "Read title from package.json: {TITLE}"
+    END IF
+
+    IF DESCRIPTION is not empty THEN
+        OUTPUT "description={DESCRIPTION}"
+        NOTICE "Read description from package.json: {DESCRIPTION}"
+    END IF
+
     RETURN VERSION
 END FUNCTION
 ```
@@ -85,7 +92,21 @@ FUNCTION read_flutter_version():
         EXIT 1
     END IF
 
+    TITLE = yq eval '.meta.title // ""' pubspec.yaml
+    DESCRIPTION = yq eval '.meta.description // ""' pubspec.yaml
+
     NOTICE "Read version from pubspec.yaml: {VERSION}"
+
+    IF TITLE is not empty THEN
+        OUTPUT "source-title={TITLE}"
+        NOTICE "Read title from pubspec.yaml: {TITLE}"
+    END IF
+
+    IF DESCRIPTION is not empty THEN
+        OUTPUT "source-description={DESCRIPTION}"
+        NOTICE "Read description from pubspec.yaml: {DESCRIPTION}"
+    END IF
+
     RETURN VERSION
 END FUNCTION
 ```
@@ -271,6 +292,8 @@ END FUNCTION
 | nodejs     | package.json: `v1.2.3+1` | `v1.2.3+1`     | `v1.2.3`             |
 | flutter    | pubspec.yaml: `1.2.3`    | `1.2.3`        | `1.2.3`              |
 | flutter    | pubspec.yaml: `v1.2.3+1` | `v1.2.3+1`     | `v1.2.3`             |
+| flutter    | + meta.title: "App"      | (also outputs source-title)           ||
+| flutter    | + meta.description: "X"  | (also outputs source-description)     ||
 | target     | Latest tag: `v1.5.0`     | `v1.5.0`       | `v1.5.0`             |
 | target     | Latest tag: `v1.5.0+10`  | `v1.5.0+10`    | `v1.5.0`             |
 | target     | No tags found            | `0.0.0`        | `0.0.0`              |
