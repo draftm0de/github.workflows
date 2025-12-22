@@ -15,8 +15,8 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
 |------|-------------|
 | `version` | Full version with optional postfix (e.g., `v1.0.1+1`) |
 | `version-short` | Version without postfix (e.g., `v1.0.1`) |
-| `source-title` | Project title from package.json name field (nodejs only) |
-| `source-description` | Project description from package.json description field (nodejs only) |
+| `source-title` | Project title from package.json meta.title (fallback: name) or pubspec.yaml meta.title |
+| `source-description` | Project description from package.json meta.description (fallback: description) or pubspec.yaml meta.description |
 
 ## Usage
 
@@ -59,8 +59,8 @@ Reads version information from Node.js package.json, Flutter pubspec.yaml, or fr
 
 **Type: nodejs**
 - Reads the `version` field from `package.json` in the repository root
-- Reads the `name` field as `source-title` output
-- Reads the `description` field as `source-description` output
+- Reads `meta.title` as `source-title` output (fallback: `name`)
+- Reads `meta.description` as `source-description` output (fallback: `description`)
 - Returns the version as-is from the file
 
 **Type: flutter**

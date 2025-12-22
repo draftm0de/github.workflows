@@ -17,136 +17,160 @@ outputs:
     description: "Clean semantic version without postfix (e.g., v1.0.1, 1.0.1)"
     value: ${{ steps.read.outputs.version_short }}
   source-title:
-    description: "Project title from package.json name field (nodejs only)"
+    description: "Project title from package.json meta.title (fallback: name) or pubspec.yaml meta.title"
     value: ${{ steps.read.outputs.source-title }}
   source-description:
-    description: "Project description from package.json description field (nodejs only)"
+    description: "Project description from package.json meta.description (fallback: description) or pubspec.yaml meta.description"
     value: ${{ steps.read.outputs.source-description }}
 
 runs:
   using: "composite"
   steps:
-    - name: Read version
+    - name: Read version from package.json
+      if: inputs.type == 'nodejs'
+      id: read-nodejs
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ ! -f "package.json" ]; then
+          echo "::error::package.json not found in repository root"
+          exit 1
+        fi
+
+        VERSION=$(jq -r '.version // empty' package.json)
+
+        if [ -z "$VERSION" ]; then
+          echo "::error::No version field found in package.json"
+          exit 1
+        fi
+
+        TITLE=$(jq -r '.meta.title // .name // empty' package.json)
+        DESCRIPTION=$(jq -r '.meta.description // .description // empty' package.json)
+
+        echo "::notice::Read version from package.json: $VERSION"
+
+        if [ -n "$TITLE" ]; then
+          echo "::notice::Read title from package.json: $TITLE"
+        fi
+
+        if [ -n "$DESCRIPTION" ]; then
+          echo "::notice::Read description from package.json: $DESCRIPTION"
+        fi
+
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "TITLE=$TITLE" >> "$GITHUB_ENV"
+        echo "DESCRIPTION=$DESCRIPTION" >> "$GITHUB_ENV"
+
+    - name: Read version from pubspec.yaml
+      if: inputs.type == 'flutter'
+      id: read-flutter
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ ! -f "pubspec.yaml" ]; then
+          echo "::error::pubspec.yaml not found in repository root"
+          exit 1
+        fi
+
+        VERSION=$(grep -E "^version:" pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r' | xargs)
+
+        if [ -z "$VERSION" ]; then
+          echo "::error::No version field found in pubspec.yaml"
+          exit 1
+        fi
+
+        TITLE=$(yq eval '.meta.title // ""' pubspec.yaml 2>/dev/null || true)
+        DESCRIPTION=$(yq eval '.meta.description // ""' pubspec.yaml 2>/dev/null || true)
+
+        echo "::notice::Read version from pubspec.yaml: $VERSION"
+
+        if [ -n "$TITLE" ]; then
+          echo "::notice::Read title from pubspec.yaml: $TITLE"
+        fi
+
+        if [ -n "$DESCRIPTION" ]; then
+          echo "::notice::Read description from pubspec.yaml: $DESCRIPTION"
+        fi
+
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "TITLE=$TITLE" >> "$GITHUB_ENV"
+        echo "DESCRIPTION=$DESCRIPTION" >> "$GITHUB_ENV"
+
+    - name: Read version from branch tags
+      if: inputs.type == 'branch'
+      id: read-branch
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        BRANCH="${{ inputs.branch }}"
+
+        if [[ -z "$BRANCH" ]]; then
+          echo "::error::branch input is required when type=branch"
+          exit 1
+        fi
+
+        echo "::notice::Reading latest version tag from ci branch"
+        echo "::notice::Branch: $BRANCH"
+
+        git fetch --tags --force >/dev/null 2>&1 || true
+
+        LATEST_TAG=""
+        if git rev-parse "origin/$BRANCH" >/dev/null 2>&1; then
+          RAW_TAGS=$(git tag --merged "origin/$BRANCH" 2>/dev/null || true)
+
+          SEMVER_TAGS=""
+          if [ -n "$RAW_TAGS" ]; then
+            while IFS= read -r TAG; do
+              [ -z "$TAG" ] && continue
+
+              if [[ "$TAG" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
+                TAG_PREFIX="${BASH_REMATCH[1]}"
+                TAG_MAJOR="${BASH_REMATCH[2]}"
+                TAG_MINOR="${BASH_REMATCH[3]}"
+                TAG_PATCH="${BASH_REMATCH[4]}"
+
+                TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
+                SEMVER_TAGS+="$TAG_BASE\n"
+              fi
+            done <<< "$RAW_TAGS"
+          fi
+
+          if [ -n "$SEMVER_TAGS" ]; then
+            LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+            LATEST_TAG=$(git tag --merged "origin/$BRANCH" | grep -E "^[vV]?${LATEST_BASE}" | head -n1)
+          fi
+        else
+          echo "::warning::Branch origin/$BRANCH not found"
+        fi
+
+        if [ -z "$LATEST_TAG" ]; then
+          VERSION="0.0.0"
+          echo "::notice::No tags found on ci branch, using default: $VERSION"
+        else
+          VERSION="$LATEST_TAG"
+          echo "::notice::Latest tag from ci branch: $VERSION"
+        fi
+
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "TITLE=" >> "$GITHUB_ENV"
+        echo "DESCRIPTION=" >> "$GITHUB_ENV"
+
+    - name: Validate and output version
       id: read
       shell: bash
       run: |
         set -euo pipefail
 
+        VERSION="${VERSION:-}"
+        TITLE="${TITLE:-}"
+        DESCRIPTION="${DESCRIPTION:-}"
         TYPE="${{ inputs.type }}"
+        BRANCH="${{ inputs.branch }}"
 
-        if [[ "$TYPE" == "nodejs" ]]; then
-          echo "::notice::Reading version from package.json"
-
-          if [ ! -f "package.json" ]; then
-            echo "::error::package.json not found in repository root"
-            exit 1
-          fi
-
-          VERSION=$(jq -r '.version // empty' package.json)
-
-          if [ -z "$VERSION" ]; then
-            echo "::error::No version field found in package.json"
-            exit 1
-          fi
-
-          TITLE=$(jq -r '.name // empty' package.json)
-          DESCRIPTION=$(jq -r '.description // empty' package.json)
-
-          echo "::notice::Read version from package.json: $VERSION"
-
-          if [ -n "$TITLE" ]; then
-            echo "source-title=$TITLE" >> "$GITHUB_OUTPUT"
-            echo "::notice::Read title from package.json: $TITLE"
-          fi
-
-          if [ -n "$DESCRIPTION" ]; then
-            echo "source-description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
-            echo "::notice::Read description from package.json: $DESCRIPTION"
-          fi
-
-        elif [[ "$TYPE" == "flutter" ]]; then
-          echo "::notice::Reading version from pubspec.yaml"
-
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "::error::pubspec.yaml not found in repository root"
-            exit 1
-          fi
-
-          VERSION=$(grep -E "^version:" pubspec.yaml | sed 's/version:[[:space:]]*//' | tr -d '\r' | xargs)
-
-          if [ -z "$VERSION" ]; then
-            echo "::error::No version field found in pubspec.yaml"
-            exit 1
-          fi
-
-          TITLE=$(yq eval '.meta.title // ""' pubspec.yaml 2>/dev/null || true)
-          DESCRIPTION=$(yq eval '.meta.description // ""' pubspec.yaml 2>/dev/null || true)
-
-          echo "::notice::Read version from pubspec.yaml: $VERSION"
-
-          if [ -n "$TITLE" ]; then
-            echo "source-title=$TITLE" >> "$GITHUB_OUTPUT"
-            echo "::notice::Read title from pubspec.yaml: $TITLE"
-          fi
-
-          if [ -n "$DESCRIPTION" ]; then
-            echo "source-description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
-            echo "::notice::Read description from pubspec.yaml: $DESCRIPTION"
-          fi
-
-        elif [[ "$TYPE" == "branch" ]]; then
-          echo "::notice::Reading latest version tag from ci branch"
-
-          BRANCH="${{ inputs.branch }}"
-
-          if [[ -z "$BRANCH" ]]; then
-            echo "::error::branch input is required when type=branch"
-            exit 1
-          fi
-
-          echo "::notice::Branch: $BRANCH"
-
-          git fetch --tags --force >/dev/null 2>&1 || true
-
-          LATEST_TAG=""
-          if git rev-parse "origin/$BRANCH" >/dev/null 2>&1; then
-            RAW_TAGS=$(git tag --merged "origin/$BRANCH" 2>/dev/null || true)
-
-            SEMVER_TAGS=""
-            if [ -n "$RAW_TAGS" ]; then
-              while IFS= read -r TAG; do
-                [ -z "$TAG" ] && continue
-
-                if [[ "$TAG" =~ ^([vV]?)([0-9]+)\.([0-9]+)\.([0-9]+)(\+.+)?$ ]]; then
-                  TAG_PREFIX="${BASH_REMATCH[1]}"
-                  TAG_MAJOR="${BASH_REMATCH[2]}"
-                  TAG_MINOR="${BASH_REMATCH[3]}"
-                  TAG_PATCH="${BASH_REMATCH[4]}"
-
-                  TAG_BASE="${TAG_MAJOR}.${TAG_MINOR}.${TAG_PATCH}"
-                  SEMVER_TAGS+="$TAG_BASE\n"
-                fi
-              done <<< "$RAW_TAGS"
-            fi
-
-            if [ -n "$SEMVER_TAGS" ]; then
-              LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
-              # Get the original tag to preserve prefix and postfix
-              LATEST_TAG=$(git tag --merged "origin/$BRANCH" | grep -E "^[vV]?${LATEST_BASE}" | head -n1)
-            fi
-          else
-            echo "::warning::Branch origin/$BRANCH not found"
-          fi
-
-          if [ -z "$LATEST_TAG" ]; then
-            VERSION="0.0.0"
-            echo "::notice::No tags found on ci branch, using default: $VERSION"
-          else
-            VERSION="$LATEST_TAG"
-            echo "::notice::Latest tag from ci branch: $VERSION"
-          fi
-
-        else
+        if [[ "$TYPE" != "nodejs" && "$TYPE" != "flutter" && "$TYPE" != "branch" ]]; then
           echo "::error::Unsupported type: $TYPE"
           echo "::error::Supported types: nodejs, flutter, branch"
           exit 1
@@ -168,6 +192,14 @@ runs:
 
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "version_short=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+
+        if [ -n "$TITLE" ]; then
+          echo "source-title=$TITLE" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -n "$DESCRIPTION" ]; then
+          echo "source-description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+        fi
 
         echo "::notice::Version: $VERSION"
         echo "::notice::Version Short: $VERSION_SHORT"

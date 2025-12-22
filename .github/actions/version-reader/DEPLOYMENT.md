@@ -53,8 +53,8 @@ FUNCTION read_nodejs_version():
         EXIT 1
     END IF
 
-    TITLE = jq -r '.name // empty' package.json
-    DESCRIPTION = jq -r '.description // empty' package.json
+    TITLE = jq -r '.meta.title // .name // empty' package.json
+    DESCRIPTION = jq -r '.meta.description // .description // empty' package.json
 
     NOTICE "Read version from package.json: {VERSION}"
 
