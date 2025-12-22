@@ -134,8 +134,8 @@ jobs:
       docker-tags: ${{ steps.docker-tags.outputs.docker-tags || '' }}
       git-tags: ${{ steps.git-tags.outputs.git-tags || '' }}
       # for further descriptions, e.g. for docker labels
-      source-title: ${{ steps.current-version.outputs.title }}
-      source-description: ${{ steps.current-version.outputs.description }}
+      source-title: ${{ steps.current-version.outputs.source-title }}
+      source-description: ${{ steps.current-version.outputs.source-description }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
