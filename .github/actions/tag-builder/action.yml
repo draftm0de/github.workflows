@@ -96,7 +96,7 @@ runs:
           fi
 
           if [ -n "$SEMVER_TAGS" ]; then
-            LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+            LATEST_BASE=$(printf '%s\n' "$SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1 | tr -d '\n\r')
             LATEST_TAG="${PREFIX}${LATEST_BASE}"
           fi
         fi
@@ -153,7 +153,7 @@ runs:
 
         GLOBAL_LATEST_BASE="0.0.0"
         if [ -n "$GLOBAL_SEMVER_TAGS" ]; then
-          GLOBAL_LATEST_BASE=$(printf '%s\n' "$GLOBAL_SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1)
+          GLOBAL_LATEST_BASE=$(printf '%s\n' "$GLOBAL_SEMVER_TAGS" | sed '/^$/d' | sort -V | tail -n1 | tr -d '\n\r')
         fi
 
         # Parse global latest
