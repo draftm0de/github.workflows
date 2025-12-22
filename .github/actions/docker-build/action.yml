@@ -103,17 +103,17 @@ runs:
         echo "> label: org.opencontainers.image.source=$REPO_URL"
 
         if [ -n "${{ inputs.image-version }}" ]; then
-          build_options="$build_options --label org.opencontainers.image.version=${{ inputs.image-version }}"
+          build_options="$build_options --label \"org.opencontainers.image.version=${{ inputs.image-version }}\""
           echo "> label: org.opencontainers.image.version=${{ inputs.image-version }}"
         fi
 
         if [ -n "${{ inputs.image-title }}" ]; then
-          build_options="$build_options --label org.opencontainers.image.title=${{ inputs.image-title }}"
+          build_options="$build_options --label \"org.opencontainers.image.title=${{ inputs.image-title }}\""
           echo "> label: org.opencontainers.image.title=${{ inputs.image-title }}"
         fi
 
         if [ -n "${{ inputs.image-description }}" ]; then
-          build_options="$build_options --label org.opencontainers.image.description=${{ inputs.image-description }}"
+          build_options="$build_options --label \"org.opencontainers.image.description=${{ inputs.image-description }}\""
           echo "> label: org.opencontainers.image.description=${{ inputs.image-description }}"
         fi
 
@@ -139,7 +139,7 @@ runs:
         options="${{ steps.arguments.outputs.build_options }}"
         if [ "${{ inputs.reproducible }}" = 'true' ]; then
           echo "> using docker buildx for reproducible build"
-          eval "SOURCE_DATE_EPOCH=0 docker buildx build --no-cache --output type=docker,rewrite-timestamp=true $options"
+          eval "SOURCE_DATE_EPOCH=0 docker buildx build --output type=docker,rewrite-timestamp=true $options"
         else
           echo "> using docker build"
           eval "docker build $options"
