@@ -19,6 +19,9 @@ inputs:
   options:
     description: Additional docker build flags appended verbatim
     required: false
+  platform:
+    description: Target platform(s) for build (e.g., 'linux/amd64', 'linux/arm64', 'linux/amd64,linux/arm64')
+    required: false
   build-args-file:
     description: Relative path (from context) to a KEY=VALUE file consumed as --build-arg entries
     required: false
@@ -51,6 +54,12 @@ runs:
         echo "::group::Preparing build arguments"
 
         build_options="${{ inputs.options }}"
+        
+        platform="${{ inputs.platform }}"
+        if [ -n "$platform" ]; then
+          build_options="$build_options --platform $platform"
+        fi
+        
 
         context="${{ inputs.context }}"
         build_args_file_input="${{ inputs.build-args-file }}"
