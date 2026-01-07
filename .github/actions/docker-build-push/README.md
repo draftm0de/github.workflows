@@ -153,13 +153,16 @@ Use in workflow:
 
 The action automatically handles registry prefixes:
 
-| Input Image      | Registry    | Result                    |
-|------------------|-------------|---------------------------|
-| `myapp`          | `ghcr.io`   | `ghcr.io/myapp:<tag>`     |
-| `org/myapp`      | `ghcr.io`   | `ghcr.io/org/myapp:<tag>` |
-| `ghcr.io/org/myapp` | `ghcr.io` | `ghcr.io/org/myapp:<tag>` |
-| `myapp:v1.2.3`   | `ghcr.io`   | `ghcr.io/myapp:v1.2.3`    |
-| `myapp`          | (empty)     | `myapp:<git-sha>`         |
+| Input Image                    | Registry    | Result                                  |
+|--------------------------------|-------------|-----------------------------------------|
+| `myapp`                        | `ghcr.io`   | `ghcr.io/myapp:<tag>`                   |
+| `org/myapp`                    | `ghcr.io`   | `ghcr.io/org/myapp:<tag>`               |
+| `org/myapp.with.dots`          | `ghcr.io`   | `ghcr.io/org/myapp.with.dots:<tag>`     |
+| `ghcr.io/org/myapp`            | `ghcr.io`   | `ghcr.io/org/myapp:<tag>`               |
+| `myapp:v1.2.3`                 | `ghcr.io`   | `ghcr.io/myapp:v1.2.3`                  |
+| `myapp`                        | (empty)     | `myapp:<git-sha>`                       |
+
+**Logic**: If a registry is provided and the image name doesn't already start with that registry prefix, the registry is automatically prepended. This works correctly even when the image name contains dots (e.g., `draftm0de/ootb.http.chameleon`).
 
 ## OCI Labels
 

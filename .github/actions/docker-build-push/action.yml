@@ -75,10 +75,8 @@ runs:
 
         registry="${{ inputs.registry }}"
         if [ -n "$registry" ]; then
-          if [[ "$image_name" != *"/"* ]] || [[ "$image_name" != *"."* ]]; then
-            if [[ "$image_name" != "$registry"* ]]; then
-              image_name="$registry/$image_name"
-            fi
+          if [[ "$image_name" != "$registry"* ]]; then
+            image_name="$registry/$image_name"
           fi
         fi
 

@@ -42,8 +42,9 @@ Parse image name, handle registry prefix, and validate inputs.
 - If `registry` is not empty:
   - Check if `image_name` already starts with registry prefix
   - If NOT already prefixed: Prepend `registry/` to `image_name`
-  - Logic: Check if image lacks `/` or `.` characters (simple image name), or doesn't start with registry value
+  - Logic: Simply check if image doesn't start with registry value (no character inspection needed)
   - Example: `myapp` + registry `ghcr.io` → `ghcr.io/myapp`
+  - Example: `org/myapp.with.dots` + registry `ghcr.io` → `ghcr.io/org/myapp.with.dots`
   - Example: `ghcr.io/myapp` + registry `ghcr.io` → `ghcr.io/myapp` (no double prefix)
 
 **Build image reference:**
@@ -196,22 +197,24 @@ The action intelligently adds registry prefix when needed:
 **Decision flow:**
 1. If `registry` input is empty → No prefix added
 2. If `registry` provided:
-   - Check if `image_name` already contains registry (starts with registry value)
+   - Check if `image_name` already starts with registry value
    - If yes → No change
    - If no → Prepend `registry/` to image name
 
 **Detection logic:**
 ```bash
 if [ -n "$registry" ]; then
-  if [[ "$image_name" != *"/"* ]] || [[ "$image_name" != *"."* ]]; then
-    if [[ "$image_name" != "$registry"* ]]; then
-      image_name="$registry/$image_name"
-    fi
+  if [[ "$image_name" != "$registry"* ]]; then
+    image_name="$registry/$image_name"
   fi
 fi
 ```
 
-This prevents double-prefixing while ensuring registry is added when needed.
+**Examples:**
+- `draftm0de/ootb.http.chameleon` + registry `ghcr.io` → `ghcr.io/draftm0de/ootb.http.chameleon`
+- `ghcr.io/myapp` + registry `ghcr.io` → `ghcr.io/myapp` (already prefixed)
+
+This prevents double-prefixing while ensuring registry is added when needed, regardless of dots in the image name.
 
 ### Tag Defaulting
 
