@@ -111,7 +111,33 @@ Use `docker/setup-buildx-action@v3` to enable BuildKit features.
 
 No configuration needed - action uses defaults.
 
-### 4. Prepare Tags for Metadata
+### 4. Determine Platform for Build
+
+Decide whether to use multi-platform based on push mode.
+
+**Logic:**
+```bash
+platform="${inputs.platform}"
+push="${inputs.push}"
+
+if [ "$push" != "true" ] && [ -n "$platform" ]; then
+  echo "::warning::Multi-platform build requested but push is disabled. Building for current platform only to enable local loading."
+  platform=""
+fi
+```
+
+**Why:**
+- Multi-platform images cannot be loaded locally (BuildKit limitation)
+- When `push: false`, we need to load the image for testing
+- Solution: Ignore platform parameter and build for native platform only
+- When `push: true`, use the full platform specification
+
+**Example:**
+- Input: `platform: linux/amd64,linux/arm64`, `push: false`
+- Result: Builds only for runner's native platform (e.g., linux/amd64)
+- Warning shown in workflow logs
+
+### 5. Prepare Tags for Metadata
 
 Parse primary tag and additional tags, then format for docker/metadata-action.
 
@@ -134,7 +160,7 @@ type=raw,value=1.0
 type=raw,value=1.0.1
 ```
 
-### 5. Generate Docker Metadata
+### 6. Generate Docker Metadata
 
 Use `docker/metadata-action@v5` to create OCI-compliant labels and tags.
 
@@ -161,14 +187,14 @@ ${{ inputs.image-version != '' && format('org.opencontainers.image.version={0}',
 - `tags`: Formatted tags for docker/build-push-action
 - `labels`: Formatted labels for docker/build-push-action
 
-### 6. Build and Push Docker Image
+### 7. Build and Push Docker Image
 
 Use `docker/build-push-action@v5` to build (and optionally push) the image with all tags.
 
 **Configuration:**
 - `context`: From input (default: `.`)
 - `target`: From input (multi-stage target name)
-- `platforms`: From `platform` input (comma-separated list)
+- `platforms`: From `platform` determination step (may be empty if push=false)
 - `push`: From input (boolean, default: `false`)
 - `load`: Inverse of `push` - if not pushing, load locally (`${{ inputs.push != 'true' }}`)
 - `tags`: From metadata step output
@@ -249,9 +275,14 @@ If no tag provided in `image` input:
 When `platform` specified with multiple architectures:
 - BuildKit builds for all platforms simultaneously
 - Requires Buildx (automatically set up in step 3)
-- Must use `push: true` (cannot load multi-platform images locally)
-- Produces multi-arch manifest
+- **Automatic handling:**
+  - When `push: true`: Builds multi-platform and pushes to registry
+  - When `push: false`: Ignores platform parameter, builds for native platform only (to enable local loading)
+- Produces multi-arch manifest when pushing
 - Example: `linux/amd64,linux/arm64` creates single image tag with platform-specific layers
+
+**Why the automatic fallback?**
+BuildKit cannot load multi-platform images locally (only supports single platform per Docker daemon). The action automatically detects this scenario and warns the user while falling back to single-platform build.
 
 ### Build Args Processing
 
@@ -287,6 +318,7 @@ Uses GitHub Actions cache with `mode=max`:
 - Available for: `docker run`, `docker save`, further processing
 - Output `has-artifact: true`
 - Good for: Testing, artifact creation, local validation
+- **Platform handling:** Multi-platform parameter ignored (builds for native platform only)
 
 **When `push: true`:**
 - Image built and pushed to registry
@@ -294,6 +326,7 @@ Uses GitHub Actions cache with `mode=max`:
 - Requires prior registry login
 - Output `has-artifact: false`
 - Good for: Deployment, distribution, publishing
+- **Platform handling:** Multi-platform parameter used (builds for all specified platforms)
 
 ## Error Conditions
 

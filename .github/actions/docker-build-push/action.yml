@@ -40,6 +40,12 @@ inputs:
   tags:
     description: Space-separated list of additional tags to push (e.g., 'latest 1 1.0 1.0.1'). When provided, these tags are pushed in addition to the primary image tag.
     required: false
+  registry-username:
+    description: Registry username for authentication (used when push is true)
+    required: false
+  registry-password:
+    description: Registry password or token for authentication (used when push is true)
+    required: false
 
 outputs:
   digest:
@@ -67,13 +73,22 @@ runs:
           exit 1
         fi
 
+        # Extract image name and tag
         if [[ "$image" == *":"* ]]; then
           image_name="${image%%:*}"
           image_tag="${image#*:}"
         else
           image_name="$image"
-          image_tag="${{ github.sha }}"
-          image_tag="${image_tag:0:7}"
+          # Try to use first tag from tags input, fallback to git SHA
+          additional_tags="${{ inputs.tags }}"
+          if [ -n "$additional_tags" ]; then
+            image_tag=$(echo "$additional_tags" | awk '{print $1}')
+            echo "::notice::Using first tag from 'tags' input as primary image tag: $image_tag"
+          else
+            image_tag="${{ github.sha }}"
+            image_tag="${image_tag:0:7}"
+            echo "::notice::No tag provided, using git SHA as primary tag: $image_tag"
+          fi
         fi
 
         registry="${{ inputs.registry }}"
@@ -134,6 +149,14 @@ runs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker registry
+      if: inputs.push == 'true' && inputs.registry-password != ''
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
 
     - name: Prepare tags for metadata
       id: tags

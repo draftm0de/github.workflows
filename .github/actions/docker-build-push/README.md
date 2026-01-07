@@ -28,6 +28,8 @@ Builds a Docker image using docker/build-push-action with metadata and optional 
 | `image-title`       | Human-readable title for org.opencontainers.image.title label              | No       | -         |
 | `image-description` | Human-readable description for org.opencontainers.image.description label  | No       | -         |
 | `tags`              | Space-separated list of additional tags to push (e.g., 'latest 1 1.0 1.0.1') | No       | -         |
+| `registry-username` | Registry username for authentication (used when push is true)               | No       | -         |
+| `registry-password` | Registry password or token for authentication (used when push is true)      | No       | -         |
 
 ## Outputs
 
@@ -67,18 +69,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push Docker image
         uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
         with:
           image: myorg/myapp:v1.2.3
           registry: ghcr.io
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
           context: .
           tags: 'latest 1 1.2 1.2.3'
           push: true
@@ -88,6 +85,8 @@ jobs:
 ```
 
 This will push the image with all specified tags: `v1.2.3`, `latest`, `1`, `1.2`, and `1.2.3`.
+
+**Note:** The action handles registry login automatically when `registry-username` and `registry-password` are provided with `push: true`.
 
 ### Multi-Platform Build
 
