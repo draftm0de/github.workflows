@@ -172,13 +172,28 @@ runs:
           ${{ inputs.image-title != '' && format('org.opencontainers.image.title={0}', inputs.image-title) || '' }}
           ${{ inputs.image-description != '' && format('org.opencontainers.image.description={0}', inputs.image-description) || '' }}
 
+    - name: Determine platform for build
+      id: platform
+      shell: bash
+      run: |
+        platform="${{ inputs.platform }}"
+        push="${{ inputs.push }}"
+
+        # Only use multi-platform when pushing (can't load multi-platform locally)
+        if [ "$push" != "true" ] && [ -n "$platform" ]; then
+          echo "::warning::Multi-platform build requested but push is disabled. Building for current platform only to enable local loading."
+          platform=""
+        fi
+
+        echo "platform=$platform" >> "$GITHUB_OUTPUT"
+
     - name: Build and push Docker image
       id: build
       uses: docker/build-push-action@v5
       with:
         context: ${{ inputs.context }}
         target: ${{ inputs.target }}
-        platforms: ${{ inputs.platform }}
+        platforms: ${{ steps.platform.outputs.platform }}
         push: ${{ inputs.push }}
         load: ${{ inputs.push != 'true' }}
         tags: ${{ steps.meta.outputs.tags }}

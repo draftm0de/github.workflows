@@ -6,6 +6,8 @@ Builds a Docker image using docker/build-push-action with metadata and optional 
 - Supports multi-stage targets, platforms, and build arguments
 - Automatic registry prefix handling when registry is provided
 - Optional push to registry or local load for testing
+- **Smart platform handling**: Multi-platform builds only when pushing (automatically falls back to single-platform for local testing)
+- Multi-tag support: Push multiple tags in a single operation
 - Automatic OCI labels for image metadata (version, title, description, source, revision)
 - GitHub Actions cache support for faster builds
 - Produces both the canonical tag and the resulting digest
@@ -90,7 +92,7 @@ This will push the image with all specified tags: `v1.2.3`, `latest`, `1`, `1.2`
 ### Multi-Platform Build
 
 ```yaml
-- name: Build multi-platform image
+- name: Build and push multi-platform image
   uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
   with:
     image: myapp:latest
@@ -98,6 +100,8 @@ This will push the image with all specified tags: `v1.2.3`, `latest`, `1`, `1.2`
     platform: linux/amd64,linux/arm64
     push: true
 ```
+
+**Note:** Multi-platform builds require `push: true`. If `push: false`, the platform parameter is automatically ignored and the image is built for the runner's native platform only (to enable local loading).
 
 ### With Build Args File
 
@@ -211,7 +215,9 @@ Build summary shows:
 
 - When `push: false`, image is loaded locally and available for subsequent steps
 - When `push: true`, image is pushed to registry and not loaded locally
+- **Multi-platform limitation:** When `push: false` and `platform` is specified, the platform parameter is automatically ignored (multi-platform images cannot be loaded locally). A warning is shown in the workflow logs.
 - Build args file must contain KEY=VALUE pairs (one per line, comments with # supported)
 - Platform builds require BuildKit (automatically enabled)
 - GitHub Actions cache improves build performance across runs
+- Multiple tags are pushed atomically in a single build operation
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details

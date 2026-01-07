@@ -323,7 +323,7 @@ jobs:
       - name: Build and push docker image
         uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
         with:
-          image: ${{ needs.docker_build.outputs.image }}
+          image: ${{ inputs.docker-image-name }}
           registry: ${{ inputs.docker-registry }}
           context: ${{ inputs.docker-build-context }}
           build-args-file: ${{ inputs.docker-build-args-file }}
