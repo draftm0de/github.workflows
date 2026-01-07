@@ -17,6 +17,7 @@ Builds a Docker image using docker/build-push-action with automatic registry pre
 - `options`: Additional docker build flags (optional)
 - `build-args-file`: Relative path to KEY=VALUE file for build args (optional)
 - `push`: Push built image to registry (default: `false`)
+- `tags`: Space-separated list of additional tags (optional, e.g., `latest 1 1.0 1.0.1`)
 - `image-version`: Image version for OCI label (optional)
 - `image-title`: Human-readable title for OCI label (optional)
 - `image-description`: Description for OCI label (optional)
@@ -110,16 +111,36 @@ Use `docker/setup-buildx-action@v3` to enable BuildKit features.
 
 No configuration needed - action uses defaults.
 
-### 4. Generate Docker Metadata
+### 4. Prepare Tags for Metadata
+
+Parse primary tag and additional tags, then format for docker/metadata-action.
+
+**Processing:**
+1. Get `image-tag` from prepare step (primary tag)
+2. Get `additional-tags` from prepare step (space-separated list)
+3. Start with primary tag: `tags_config="type=raw,value=$primary_tag"`
+4. For each additional tag:
+   - Append to config: `tags_config="$tags_config\ntype=raw,value=$tag"`
+5. Output multi-line string to `$GITHUB_OUTPUT` using heredoc
+
+**Example:**
+```
+Input tags: "latest 1 1.0 1.0.1"
+Output:
+type=raw,value=1.0.1
+type=raw,value=latest
+type=raw,value=1
+type=raw,value=1.0
+type=raw,value=1.0.1
+```
+
+### 5. Generate Docker Metadata
 
 Use `docker/metadata-action@v5` to create OCI-compliant labels and tags.
 
 **Configuration:**
 - `images`: Use `image-name` from prepare step (without tag)
-- `tags`: Single raw tag using `image-tag` from prepare step
-  ```yaml
-  type=raw,value=${{ steps.prepare.outputs.image-tag }}
-  ```
+- `tags`: Use `tags-config` from tags preparation step (multi-line format)
 
 **Labels (always added):**
 - `org.opencontainers.image.created`: Use `github.event.head_commit.timestamp` or `github.event.repository.updated_at`
@@ -140,9 +161,9 @@ ${{ inputs.image-version != '' && format('org.opencontainers.image.version={0}',
 - `tags`: Formatted tags for docker/build-push-action
 - `labels`: Formatted labels for docker/build-push-action
 
-### 5. Build and Push Docker Image
+### 6. Build and Push Docker Image
 
-Use `docker/build-push-action@v5` to build (and optionally push) the image.
+Use `docker/build-push-action@v5` to build (and optionally push) the image with all tags.
 
 **Configuration:**
 - `context`: From input (default: `.`)

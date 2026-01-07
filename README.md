@@ -31,8 +31,7 @@ DraftMode curates the workflows and composite GitHub Actions we reach for most o
 - [`docker-tag-builder`](.github/actions/docker-tag-builder/README.md) — Builds Docker image tags from semantic versions or custom tags (sha, edge, beta). Supports patch/minor/major levels and latest tag detection.
 
 ### Docker
-- [`docker-build`](.github/actions/docker-build/README.md) — Builds Docker images with optional Buildx reproducibility. Defaults to short git SHA tag when no tag provided.
-- [`docker-push`](.github/actions/docker-push/README.md) — Pushes Docker images to registries with username inference from image names, automatic tag stripping, and multi-tag support.
+- [`docker-build-push`](.github/actions/docker-build-push/README.md) — Builds and pushes Docker images with automatic registry prefix handling, multi-tag support, OCI metadata labels, and BuildKit caching.
 
 ### Artifacts
 - [`artifact-from-image`](.github/actions/artifact-from-image/README.md) — Saves a Docker image to an artifact for later workflows.

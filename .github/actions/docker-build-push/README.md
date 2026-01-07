@@ -25,6 +25,7 @@ Builds a Docker image using docker/build-push-action with metadata and optional 
 | `image-version`     | Image version for org.opencontainers.image.version label                    | No       | -         |
 | `image-title`       | Human-readable title for org.opencontainers.image.title label              | No       | -         |
 | `image-description` | Human-readable description for org.opencontainers.image.description label  | No       | -         |
+| `tags`              | Space-separated list of additional tags to push (e.g., 'latest 1 1.0 1.0.1') | No       | -         |
 
 ## Outputs
 
@@ -50,7 +51,7 @@ Builds a Docker image using docker/build-push-action with metadata and optional 
 
 This builds `ghcr.io/myapp:<git-sha>` locally without pushing.
 
-### Build and Push to GHCR
+### Build and Push to GHCR with Multiple Tags
 
 ```yaml
 permissions:
@@ -77,11 +78,14 @@ jobs:
           image: myorg/myapp:v1.2.3
           registry: ghcr.io
           context: .
+          tags: 'latest 1 1.2 1.2.3'
           push: true
           image-version: '1.2.3'
           image-title: 'My Application'
           image-description: 'A sample application'
 ```
+
+This will push the image with all specified tags: `v1.2.3`, `latest`, `1`, `1.2`, and `1.2.3`.
 
 ### Multi-Platform Build
 

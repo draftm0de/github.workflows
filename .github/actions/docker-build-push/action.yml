@@ -37,6 +37,9 @@ inputs:
   image-description:
     description: Human-readable description for org.opencontainers.image.description label
     required: false
+  tags:
+    description: Space-separated list of additional tags to push (e.g., 'latest 1 1.0 1.0.1'). When provided, these tags are pushed in addition to the primary image tag.
+    required: false
 
 outputs:
   digest:
@@ -85,6 +88,9 @@ runs:
         echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
         echo "image-tag=$image_tag" >> "$GITHUB_OUTPUT"
 
+        additional_tags="${{ inputs.tags }}"
+        echo "additional-tags=$additional_tags" >> "$GITHUB_OUTPUT"
+
         has_artifact="false"
         if [ "${{ inputs.push }}" != "true" ]; then
           has_artifact="true"
@@ -129,13 +135,35 @@ runs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    - name: Prepare tags for metadata
+      id: tags
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        primary_tag="${{ steps.prepare.outputs.image-tag }}"
+        additional_tags="${{ steps.prepare.outputs.additional-tags }}"
+
+        tags_config="type=raw,value=$primary_tag"
+
+        if [ -n "$additional_tags" ]; then
+          for tag in $additional_tags; do
+            tags_config="$tags_config"$'\n'"type=raw,value=$tag"
+          done
+        fi
+
+        {
+          echo 'tags-config<<EOF'
+          echo "$tags_config"
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
     - name: Docker metadata
       id: meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ steps.prepare.outputs.image-name }}
-        tags: |
-          type=raw,value=${{ steps.prepare.outputs.image-tag }}
+        tags: ${{ steps.tags.outputs.tags-config }}
         labels: |
           org.opencontainers.image.created=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
           org.opencontainers.image.revision=${{ github.sha }}
@@ -162,11 +190,26 @@ runs:
     - name: Summary
       shell: bash
       run: |
+        image_name="${{ steps.prepare.outputs.image-name }}"
+        primary_tag="${{ steps.prepare.outputs.image-tag }}"
+        additional_tags="${{ steps.prepare.outputs.additional-tags }}"
+        pushed="${{ inputs.push }}"
+
         {
           echo "### docker-build-push"
           echo "- context: ${{ inputs.context }}"
           echo "- image: ${{ steps.prepare.outputs.image-ref }}"
           echo "- digest: ${{ steps.build.outputs.digest }}"
           echo "- platform: ${{ inputs.platform || 'default' }}"
-          echo "- pushed: ${{ inputs.push }}"
+          echo "- pushed: $pushed"
+
+          if [ "$pushed" == "true" ]; then
+            echo "- tags pushed:"
+            echo "  - \`$image_name:$primary_tag\`"
+            if [ -n "$additional_tags" ]; then
+              for tag in $additional_tags; do
+                echo "  - \`$image_name:$tag\`"
+              done
+            fi
+          fi
         } >> "$GITHUB_STEP_SUMMARY"
