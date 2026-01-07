@@ -52,8 +52,10 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 | `docker-build-reproducible`| boolean | No       | `true`          | Build reproducible Docker image with `SOURCE_DATE_EPOCH`. |
 | `docker-tag-levels`        | string  | No       | `'patch,latest'`| Version levels to tag: `patch`, `minor`, `major`, `latest` (comma-separated). |
 | `docker-registry`          | string  | No       | `'ghcr.io'`     | Docker registry URL (e.g., `'ghcr.io'`). Leave blank for Docker Hub. |
-| `docker-registry-username` | string  | No       | `''`            | Docker registry username. If not provided, extracted from `docker-image-name` (e.g., `myuser/myapp` → `myuser`). |
+| `docker-registry-username` | string  | No       | `''`            | Docker registry username. Defaults to `github.actor` if not provided. |
 | `docker-registry-password` | string  | No       | `''`            | Docker registry password. Defaults to `secrets.GITHUB_TOKEN` if not provided. |
+| `docker-build-platform`    | string  | No       | `''`            | Target platforms for build (e.g., `'linux/amd64,linux/arm64'`). Leave blank for default. |
+| `docker-build-provenance`  | boolean | No       | `true`          | Generate provenance attestation for supply chain security (creates `unknown/unknown` platform entry - this is correct per OCI spec). |
 
 ### Input Notes
 
@@ -79,10 +81,11 @@ Consuming repositories should create a workflow file (e.g., `.github/workflows/c
 - `docker-build-context` defaults to repository root (`.`).
 - `docker-build-args-file` is optional - provide path to a file containing build args (one per line, format: `ARG=value`).
 - `docker-build-options` defaults to `--no-cache` for clean builds.
-- `docker-build-reproducible` uses `SOURCE_DATE_EPOCH` from git commit timestamp for reproducible builds.
+- `docker-build-platform` enables multi-platform builds (e.g., `'linux/amd64,linux/arm64'`). When `push: false`, multi-platform is automatically disabled (can't load multi-platform locally).
+- `docker-build-provenance` (default: `true`) generates build attestations for supply chain security. This creates an `unknown/unknown` platform entry in the registry (normal per OCI spec). Set to `false` for cleaner UI but less security.
 - `docker-tag-levels` controls which version tags to create (defaults to `patch,latest`).
 - `docker-registry` defaults to GitHub Container Registry (`ghcr.io`).
-- `docker-registry-username` is inferred from `docker-image-name` if not provided (e.g., `myuser/myapp` → username: `myuser`).
+- `docker-registry-username` defaults to `github.actor` if not provided.
 - `docker-registry-password` defaults to `secrets.GITHUB_TOKEN` if not provided.
 - Docker push requires both `docker-image-name` AND `ci-tag-source` to be configured.
 

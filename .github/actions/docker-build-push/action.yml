@@ -46,6 +46,10 @@ inputs:
   registry-password:
     description: Registry password or token for authentication (used when push is true)
     required: false
+  provenance:
+    description: Generate provenance attestation (default true for security, set false for cleaner registry UI)
+    required: false
+    default: 'true'
 
 outputs:
   digest:
@@ -195,12 +199,13 @@ runs:
           ${{ inputs.image-title != '' && format('org.opencontainers.image.title={0}', inputs.image-title) || '' }}
           ${{ inputs.image-description != '' && format('org.opencontainers.image.description={0}', inputs.image-description) || '' }}
 
-    - name: Determine platform for build
+    - name: Determine platform and provenance for build
       id: platform
       shell: bash
       run: |
         platform="${{ inputs.platform }}"
         push="${{ inputs.push }}"
+        provenance="${{ inputs.provenance }}"
 
         # Only use multi-platform when pushing (can't load multi-platform locally)
         if [ "$push" != "true" ] && [ -n "$platform" ]; then
@@ -208,7 +213,14 @@ runs:
           platform=""
         fi
 
+        # Disable provenance for non-push builds (faster, attestations not needed for local testing)
+        if [ "$push" != "true" ]; then
+          provenance="false"
+          echo "::notice::Provenance disabled for non-push build (not needed for local testing)"
+        fi
+
         echo "platform=$platform" >> "$GITHUB_OUTPUT"
+        echo "provenance=$provenance" >> "$GITHUB_OUTPUT"
 
     - name: Build and push Docker image
       id: build
@@ -222,6 +234,7 @@ runs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         build-args: ${{ steps.build-args.outputs.build-args }}
+        provenance: ${{ steps.platform.outputs.provenance }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 

@@ -91,6 +91,11 @@ on:
         description: "Docker registry password (leave blank to use secrets.GITHUB_TOKEN)"
         required: false
         type: string
+      docker-build-provenance:
+        description: "Generate provenance attestation for Docker builds (default true for security, set false for cleaner registry UI)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write    # Required for git_tag_push job
@@ -239,6 +244,7 @@ jobs:
           context: ${{ inputs.docker-build-context }}
           build-args-file: ${{ inputs.docker-build-args-file }}
           platform: ${{ inputs.docker-build-platform }}
+          provenance: ${{ inputs.docker-build-provenance }}
           push: false
           image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}
           image-title: ${{ needs.auto_tagging.outputs.source-title || '' }}
@@ -323,6 +329,7 @@ jobs:
           context: ${{ inputs.docker-build-context }}
           build-args-file: ${{ inputs.docker-build-args-file }}
           platform: ${{ inputs.docker-build-platform }}
+          provenance: ${{ inputs.docker-build-provenance }}
           tags: ${{ needs.auto_tagging.outputs.docker-tags }}
           push: true
           image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}

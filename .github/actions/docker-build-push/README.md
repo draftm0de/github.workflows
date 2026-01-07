@@ -30,6 +30,7 @@ Builds a Docker image using docker/build-push-action with metadata and optional 
 | `tags`              | Space-separated list of additional tags to push (e.g., 'latest 1 1.0 1.0.1') | No       | -         |
 | `registry-username` | Registry username for authentication (used when push is true)               | No       | -         |
 | `registry-password` | Registry password or token for authentication (used when push is true)      | No       | -         |
+| `provenance`        | Generate provenance attestation (default: true for security)                | No       | `true`    |
 
 ## Outputs
 
@@ -210,6 +211,26 @@ Build summary shows:
 - pushed: true
 ```
 
+## Provenance Attestation
+
+By default, the action generates build provenance attestations for supply chain security. This creates an additional `unknown/unknown` platform entry in the registry (this is **normal and correct** per OCI spec).
+
+**Benefits of provenance:**
+- ✅ SLSA compliance for security audits
+- ✅ Verifiable builds - proof of how/where image was built
+- ✅ Industry best practice (2024+)
+
+**To disable (cleaner UI, less secure):**
+```yaml
+- uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
+  with:
+    image: myapp
+    provenance: false
+    push: true
+```
+
+**Recommendation:** Keep provenance enabled (default) unless you have a specific reason to disable it.
+
 ## Notes
 
 - When `push: false`, image is loaded locally and available for subsequent steps
@@ -219,4 +240,5 @@ Build summary shows:
 - Platform builds require BuildKit (automatically enabled)
 - GitHub Actions cache improves build performance across runs
 - Multiple tags are pushed atomically in a single build operation
+- Registry authentication is handled automatically when credentials are provided
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for implementation details
