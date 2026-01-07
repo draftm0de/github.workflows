@@ -5,6 +5,9 @@ inputs:
   image:
     description: Docker image name (e.g., 'ghcr.io/org/app')
     required: true
+  registry:
+    description: Docker registry URL (e.g., 'ghcr.io'). If provided and image lacks registry prefix, it will be added automatically.
+    required: false
   target:
     description: Optional multi-stage build target name
     required: false
@@ -68,6 +71,15 @@ runs:
           image_name="$image"
           image_tag="${{ github.sha }}"
           image_tag="${image_tag:0:7}"
+        fi
+
+        registry="${{ inputs.registry }}"
+        if [ -n "$registry" ]; then
+          if [[ "$image_name" != *"/"* ]] || [[ "$image_name" != *"."* ]]; then
+            if [[ "$image_name" != "$registry"* ]]; then
+              image_name="$registry/$image_name"
+            fi
+          fi
         fi
 
         image_ref="$image_name:$image_tag"
