@@ -300,9 +300,10 @@ jobs:
     name: Push Docker Image
     if: |
       github.event_name == 'push' &&
-      needs.setup.outputs.is-release-branch == 'true' &&      
+      needs.setup.outputs.is-release-branch == 'true' &&
       inputs.docker-image-name != '' &&
-      needs.auto_tagging.outputs.docker-tags != ''
+      needs.auto_tagging.outputs.docker-tags != '' &&
+      needs.docker_build.result == 'success'
     runs-on: ubuntu-latest
     needs:
       - setup
