@@ -1,0 +1,162 @@
+name: Build and Push Docker Image
+description: Build a Docker image using docker/build-push-action with metadata and optional registry push
+
+inputs:
+  image:
+    description: Docker image name (e.g., 'ghcr.io/org/app')
+    required: true
+  target:
+    description: Optional multi-stage build target name
+    required: false
+  context:
+    description: Build context directory
+    required: false
+    default: .
+  platform:
+    description: Target platforms for build (e.g., 'linux/amd64,linux/arm64')
+    required: false
+  options:
+    description: Additional docker build flags appended verbatim
+    required: false
+  build-args-file:
+    description: Relative path (from context) to a KEY=VALUE file consumed as --build-arg entries
+    required: false
+  push:
+    description: Push built image to registry
+    required: false
+    default: 'false'
+  image-version:
+    description: Image version for org.opencontainers.image.version label
+    required: false
+  image-title:
+    description: Human-readable title for org.opencontainers.image.title label
+    required: false
+  image-description:
+    description: Human-readable description for org.opencontainers.image.description label
+    required: false
+
+outputs:
+  digest:
+    description: Docker image digest produced by the build
+    value: ${{ steps.build.outputs.digest }}
+  image:
+    description: Built docker image reference
+    value: ${{ steps.prepare.outputs.image-ref }}
+  has-artifact:
+    description: Whether artifact is available (false when pushing)
+    value: ${{ steps.prepare.outputs.has-artifact }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare build configuration
+      id: prepare
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        image="${{ inputs.image }}"
+        if [ -z "$image" ]; then
+          echo "::error::image input is required"
+          exit 1
+        fi
+
+        if [[ "$image" == *":"* ]]; then
+          image_name="${image%%:*}"
+          image_tag="${image#*:}"
+        else
+          image_name="$image"
+          image_tag="${{ github.sha }}"
+          image_tag="${image_tag:0:7}"
+        fi
+
+        image_ref="$image_name:$image_tag"
+        echo "image-ref=$image_ref" >> "$GITHUB_OUTPUT"
+        echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
+        echo "image-tag=$image_tag" >> "$GITHUB_OUTPUT"
+
+        has_artifact="false"
+        if [ "${{ inputs.push }}" != "true" ]; then
+          has_artifact="true"
+        fi
+        echo "has-artifact=$has_artifact" >> "$GITHUB_OUTPUT"
+
+        context="${{ inputs.context }}"
+        build_args_file_input="${{ inputs.build-args-file }}"
+        if [ -n "$build_args_file_input" ]; then
+          build_args_file="$context/$build_args_file_input"
+          if [ -f "$build_args_file" ]; then
+            echo "build-args-file=$build_args_file" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Build-args file not found: $build_args_file"
+            exit 1
+          fi
+        fi
+
+    - name: Parse build args from file
+      id: build-args
+      if: steps.prepare.outputs.build-args-file != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        build_args_file="${{ steps.prepare.outputs.build-args-file }}"
+        echo "Reading build args from: $build_args_file"
+
+        build_args=""
+        while IFS='=' read -r key value; do
+          if [ -n "$key" ] && [[ ! "$key" =~ ^# ]]; then
+            build_args="${build_args}${key}=${value}"$'\n'
+          fi
+        done < "$build_args_file"
+
+        {
+          echo 'build-args<<EOF'
+          echo "$build_args"
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ steps.prepare.outputs.image-name }}
+        tags: |
+          type=raw,value=${{ steps.prepare.outputs.image-tag }}
+        labels: |
+          org.opencontainers.image.created=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          ${{ inputs.image-version != '' && format('org.opencontainers.image.version={0}', inputs.image-version) || '' }}
+          ${{ inputs.image-title != '' && format('org.opencontainers.image.title={0}', inputs.image-title) || '' }}
+          ${{ inputs.image-description != '' && format('org.opencontainers.image.description={0}', inputs.image-description) || '' }}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        target: ${{ inputs.target }}
+        platforms: ${{ inputs.platform }}
+        push: ${{ inputs.push }}
+        load: ${{ inputs.push != 'true' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: ${{ steps.build-args.outputs.build-args }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Summary
+      shell: bash
+      run: |
+        {
+          echo "### docker-build-push"
+          echo "- context: ${{ inputs.context }}"
+          echo "- image: ${{ steps.prepare.outputs.image-ref }}"
+          echo "- digest: ${{ steps.build.outputs.digest }}"
+          echo "- platform: ${{ inputs.platform || 'default' }}"
+          echo "- pushed: ${{ inputs.push }}"
+        } >> "$GITHUB_STEP_SUMMARY"

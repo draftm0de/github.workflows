@@ -64,11 +64,10 @@ on:
         required: false
         type: string
         default: "--no-cache"
-      docker-build-reproducible:
-        description: "Build reproducible Docker image with SOURCE_DATE_EPOCH"
+      docker-build-platform:
+        description: ""
+        type: string
         required: false
-        type: boolean
-        default: true
       docker-tag-levels:
         description: "Version levels to tag: patch, minor, major, latest (comma-separated)"
         required: false
@@ -218,7 +217,6 @@ jobs:
       - tests
     outputs:
       image: ${{ steps.build.outputs.image }}
-      artifact: ${{ steps.upload.outputs.artifact }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -233,24 +231,17 @@ jobs:
           new-version: ${{ needs.auto_tagging.outputs.next-version-short }}
 
       - name: Build docker image
-        uses: draftm0de/github.workflows/.github/actions/docker-build@main
+        uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
         id: build
         with:
           image: ${{ inputs.docker-image-name }}
           context: ${{ inputs.docker-build-context }}
           build-args-file: ${{ inputs.docker-build-args-file }}
-          options: ${{ inputs.docker-build-options }}
-          reproducible: ${{ inputs.docker-build-reproducible }}
-          # for docker labels
+          platform: ${{ inputs.docker-build-platform }}
+          push: false
           image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}
           image-title: ${{ needs.auto_tagging.outputs.source-title || '' }}
           image-description: ${{ needs.auto_tagging.outputs.source-description || '' }}
-
-      - name: Upload docker image to artifact
-        id: upload
-        uses: draftm0de/github.workflows/.github/actions/artifact-from-image@main
-        with:
-          image: ${{ steps.build.outputs.image }}
 
   # general job to update version file (only on push to release branch)
   version_update:
@@ -320,17 +311,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Load docker image from artifact
-        id: download
-        uses: draftm0de/github.workflows/.github/actions/artifact-to-image@main
+      - name: Login to Docker registry
+        uses: docker/login-action@v3
         with:
-          artifact: ${{ needs.docker_build.outputs.artifact }}
-
-      - name: Push docker image to registry
-        uses: draftm0de/github.workflows/.github/actions/docker-push@main
-        with:
-          image: ${{ steps.download.outputs.image }}
-          tags: ${{ needs.auto_tagging.outputs.docker-tags }}
           registry: ${{ inputs.docker-registry }}
-          username: ${{ inputs.docker-registry-username }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ inputs.docker-registry-username || github.actor }}
+          password: ${{ inputs.docker-registry-password || secrets.GITHUB_TOKEN }}
+
+      - name: Build and push docker image
+        uses: draftm0de/github.workflows/.github/actions/docker-build-push@main
+        with:
+          image: ${{ needs.docker_build.outputs.image }}
+          context: ${{ inputs.docker-build-context }}
+          build-args-file: ${{ inputs.docker-build-args-file }}
+          platform: ${{ inputs.docker-build-platform }}
+          push: true
+          image-version: ${{ needs.auto_tagging.outputs.next-version-short || '' }}
+          image-title: ${{ needs.auto_tagging.outputs.source-title || '' }}
+          image-description: ${{ needs.auto_tagging.outputs.source-description || '' }}

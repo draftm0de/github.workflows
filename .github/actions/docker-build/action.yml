@@ -19,6 +19,9 @@ inputs:
   options:
     description: Additional docker build flags appended verbatim
     required: false
+  platform:
+    description: Build multi platform
+    required: false
   build-args-file:
     description: Relative path (from context) to a KEY=VALUE file consumed as --build-arg entries
     required: false
@@ -39,6 +42,9 @@ outputs:
   image:
     description: Built docker image reference
     value: ${{ steps.arguments.outputs.tag }}
+  has-artifact:
+    description: Built docker image artifact
+    value: ${{ steps.arguments.outputs.artifact }}
 
 runs:
   using: composite
@@ -48,7 +54,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Preparing build arguments"
 
         build_options="${{ inputs.options }}"
 
@@ -121,7 +126,6 @@ runs:
         build_options="$build_options $context"
         echo "> tag: $tag"
 
-        echo "::endgroup::"
         echo "build_options=$build_options" >> "$GITHUB_OUTPUT"        
         echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
